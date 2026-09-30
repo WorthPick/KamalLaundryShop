@@ -199,6 +199,14 @@ select:focus {
 .button.primary:hover {
   background: var(--teal-dark);
 }
+.button.danger {
+  background: #fff1ee;
+  color: #bb4d3c;
+  border: 1px solid #f4c5bb;
+}
+.button.danger:hover {
+  background: #ffe8e1;
+}
 .button.secondary {
   background: var(--mint);
   color: var(--teal);
@@ -588,6 +596,12 @@ tbody tr:hover {
   font-size: 11px;
   padding: 6px;
 }
+.small-action.danger {
+  color: #b85040;
+  background: #fff1ee;
+  border: 1px solid #f2c9c1;
+  border-radius: 4px;
+}
 .empty-state {
   text-align: center;
   padding: 50px;
@@ -750,10 +764,42 @@ tbody tr:hover {
   width: min(500px, 100%);
   padding: 25px;
   box-shadow: var(--shadow);
+  border: 1px solid var(--line);
+}
+.modal.danger {
+  border-color: #f4c5bb;
 }
 .modal h2 {
   font-size: 20px;
   margin: 0 0 19px;
+}
+.reset-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 18px;
+  background: #fff8f5;
+  border: 1px solid #f6d7cf;
+  border-radius: 8px;
+  color: var(--ink);
+}
+.warning-badge {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fbe3de;
+  color: #c85f48;
+  font-weight: 800;
+  font-size: 16px;
+}
+.reset-warning p {
+  margin: 0 0 4px;
+  font-weight: 700;
+}
+.reset-warning small {
+  color: var(--muted);
 }
 .modal-actions {
   display: flex;

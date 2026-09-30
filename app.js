@@ -22,12 +22,7 @@ const currentDateKey = dateKey(today);
 const uid = (prefix) =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const seedData = {
-  customers: [
-    { id: "c1", name: "Aarav Sharma", phone: "9841234567" },
-    { id: "c2", name: "Mina Gurung", phone: "9818123456" },
-    { id: "c3", name: "Rohan Thapa", phone: "9801112233" },
-    { id: "c4", name: "Sita Rai", phone: "9860123456" },
-  ],
+  customers: [],
   services: [
     { id: "s1", name: "Shirt / blouse", price: 80, type: "per piece" },
     { id: "s2", name: "Trouser / jeans", price: 100, type: "per piece" },
@@ -35,71 +30,8 @@ const seedData = {
     { id: "s4", name: "Wash & fold", price: 120, type: "per kg" },
     { id: "s5", name: "Dry clean · suit", price: 450, type: "per piece" },
   ],
-  orders: [
-    {
-      id: "o1",
-      tokenNo: 1042,
-      customerId: "c1",
-      date: currentDateKey,
-      deliveryDate: dateKey(addDays(today, 2)),
-      status: "Ready",
-      total: 560,
-      discount: 0,
-      paid: 300,
-      items: [
-        { serviceId: "s1", qty: 2, rate: 80, amount: 160 },
-        { serviceId: "s3", qty: 1, rate: 250, amount: 250 },
-        { serviceId: "s2", qty: 1, rate: 100, amount: 100 },
-      ],
-    },
-    {
-      id: "o2",
-      tokenNo: 1041,
-      customerId: "c2",
-      date: currentDateKey,
-      deliveryDate: "2026-10-01",
-      status: "Received",
-      total: 840,
-      discount: 60,
-      paid: 400,
-      items: [
-        { serviceId: "s4", qty: 6, rate: 120, amount: 720 },
-        { serviceId: "s1", qty: 2, rate: 80, amount: 160 },
-      ],
-    },
-    {
-      id: "o3",
-      tokenNo: 1040,
-      customerId: "c3",
-      date: currentDateKey,
-      deliveryDate: "2026-10-01",
-      status: "Received",
-      total: 450,
-      discount: 0,
-      paid: 0,
-      items: [{ serviceId: "s5", qty: 1, rate: 450, amount: 450 }],
-    },
-    {
-      id: "o4",
-      tokenNo: 1039,
-      customerId: "c4",
-      date: "2026-09-29",
-      deliveryDate: "2026-10-01",
-      status: "Delivered",
-      total: 400,
-      discount: 0,
-      paid: 400,
-      items: [
-        { serviceId: "s2", qty: 2, rate: 100, amount: 200 },
-        { serviceId: "s1", qty: 2, rate: 80, amount: 160 },
-      ],
-    },
-  ],
-  inventory: [
-    { id: "i1", name: "Detergent", stock: 10, unit: "kg", minStock: 3 },
-    { id: "i2", name: "Hangers", stock: 200, unit: "pcs", minStock: 50 },
-    { id: "i3", name: "Starch powder", stock: 1, unit: "kg", minStock: 2 },
-  ],
+  orders: [],
+  inventory: [],
 };
 let data = seedData;
 let currentView = "dashboard";
@@ -134,7 +66,7 @@ const serviceById = (id) => data.services.find((s) => s.id === id);
 const statusClass = (status) => status.toLowerCase();
 const todayOrders = () => data.orders.filter((o) => o.date === currentDateKey);
 const nextToken = () =>
-  Math.max(...data.orders.map((o) => Number(o.tokenNo)), 1042) + 1;
+  Math.max(0, ...data.orders.map((o) => Number(o.tokenNo))) + 1;
 function showToast(message) {
   const el = document.getElementById("toast");
   el.textContent = message;
@@ -172,6 +104,17 @@ function dashboardView() {
   const income = orders.reduce((sum, o) => sum + o.paid, 0);
   const due = data.orders.reduce((sum, o) => sum + (o.total - o.paid), 0);
   const ready = data.orders.filter((o) => o.status === "Ready").length;
+  const yesterdayKey = dateKey(addDays(today, -1));
+  const yesterdayOrders = data.orders.filter((o) => o.date === yesterdayKey).length;
+  const orderDelta = orders.length - yesterdayOrders;
+  const orderDeltaLabel =
+    !yesterdayOrders && orders.length
+      ? "New today"
+      : !yesterdayOrders && !orders.length
+        ? "No orders yet"
+        : orderDelta === 0
+          ? "Same as yesterday"
+          : `${orderDelta > 0 ? "+" : ""}${orderDelta} from yesterday`;
   const days = [
     "24 Sep",
     "25 Sep",
@@ -191,7 +134,7 @@ function dashboardView() {
     income,
   ];
   const max = Math.max(...values, 1);
-  return `<div class="section-head"><div><span class="eyebrow">SHOP PULSE</span><h2>Today at a glance</h2></div><span class="muted">${dateLabel(today)}</span></div><div class="stats-grid"><div class="stat-card"><span class="stat-label">Today’s orders</span><strong>${orders.length}</strong><span class="stat-note">${orders.length ? "+2 from yesterday" : "No orders yet"}</span></div><div class="stat-card"><span class="stat-label">Today’s income</span><strong>${money(income)}</strong><span class="stat-note">Cash collected</span></div><div class="stat-card"><span class="stat-label">Pending payments</span><strong>${money(due)}</strong><span class="stat-note">Across all orders</span></div><div class="stat-card"><span class="stat-label">Ready for pickup</span><strong>${ready}</strong><span class="stat-note">${ready ? "Send a reminder" : "All clear"}</span></div></div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>Sales rhythm</h3><p>Collected income · last 7 days</p></div><span class="eyebrow">NPR</span></div><div class="chart">${values.map((v, i) => `<div class="chart-col"><div class="bar-wrap"><div class="bar ${i === 6 ? "today" : ""}" style="height:${Math.max(7, (v / max) * 100)}%" title="${money(v)}"></div></div><small>${days[i]}</small></div>`).join("")}</div></section><section class="panel"><div class="panel-head"><div><h3>Pickup board</h3><p>Orders that need attention</p></div><button class="small-action" data-view="orders">View all →</button></div><div class="mini-list">${
+  return `<div class="section-head"><div><span class="eyebrow">SHOP PULSE</span><h2>Today at a glance</h2></div><span class="muted">${dateLabel(today)}</span></div><div class="stats-grid"><div class="stat-card"><span class="stat-label">Today’s orders</span><strong>${orders.length}</strong><span class="stat-note">${orderDeltaLabel}</span></div><div class="stat-card"><span class="stat-label">Today’s income</span><strong>${money(income)}</strong><span class="stat-note">Cash collected</span></div><div class="stat-card"><span class="stat-label">Pending payments</span><strong>${money(due)}</strong><span class="stat-note">Across all orders</span></div><div class="stat-card"><span class="stat-label">Ready for pickup</span><strong>${ready}</strong><span class="stat-note">${ready ? "Send a reminder" : "All clear"}</span></div></div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>Sales rhythm</h3><p>Collected income · last 7 days</p></div><span class="eyebrow">NPR</span></div><div class="chart">${values.map((v, i) => `<div class="chart-col"><div class="bar-wrap"><div class="bar ${i === 6 ? "today" : ""}" style="height:${Math.max(7, (v / max) * 100)}%" title="${money(v)}"></div></div><small>${days[i]}</small></div>`).join("")}</div></section><section class="panel"><div class="panel-head"><div><h3>Pickup board</h3><p>Orders that need attention</p></div><button class="small-action" data-view="orders">View all →</button></div><div class="mini-list">${
     data.orders
       .filter((o) => o.status !== "Delivered")
       .slice(0, 5)
@@ -203,7 +146,7 @@ function dashboardView() {
   }</div></section></div><section class="panel table-panel" style="margin-top:18px"><div class="table-toolbar"><div><h3 style="margin:0;font-size:15px">Latest orders</h3><p class="muted" style="margin:5px 0 0;font-size:11px">A quick look at the front counter</p></div><button class="button secondary" data-view="billing">＋ New order</button></div>${ordersTable(data.orders.slice(0, 4))}</section>`;
 }
 function ordersTable(orders) {
-  return `<table><thead><tr><th>Token</th><th>Customer</th><th>Delivery</th><th>Status</th><th>Total</th><th></th></tr></thead><tbody>${orders.map((o) => `<tr><td><strong>#${o.tokenNo}</strong><span class="subtext">${dateLabel(o.date)}</span></td><td>${customerName(o.customerId)}</td><td>${dateLabel(o.deliveryDate)}</td><td><span class="status ${statusClass(o.status)}">${o.status}</span></td><td class="amount">${money(o.total)}<span class="subtext">${o.total - o.paid ? money(o.total - o.paid) + " due" : "Paid"}</span></td><td><div class="row-actions"><button class="small-action" data-print="${o.id}">Print</button><button class="small-action" data-status="${o.id}">Next</button></div></td></tr>`).join("") || '<tr><td colspan="6" class="empty-state">No orders found.</td></tr>'}</tbody></table>`;
+  return `<table><thead><tr><th>Token</th><th>Customer</th><th>Delivery</th><th>Status</th><th>Total</th><th></th></tr></thead><tbody>${orders.map((o) => `<tr><td><strong>#${o.tokenNo}</strong><span class="subtext">${dateLabel(o.date)}</span></td><td>${customerName(o.customerId)}</td><td>${dateLabel(o.deliveryDate)}</td><td><span class="status ${statusClass(o.status)}">${o.status}</span></td><td class="amount">${money(o.total)}<span class="subtext">${o.total - o.paid ? money(o.total - o.paid) + " due" : "Paid"}</span></td><td><div class="row-actions"><button class="small-action" data-print="${o.id}">Print</button><button class="small-action" data-status="${o.id}">Next</button><button class="small-action" data-pay="${o.id}">${o.total - o.paid ? "Clear due" : "Paid"}</button></div></td></tr>`).join("") || '<tr><td colspan="6" class="empty-state">No orders found.</td></tr>'}</tbody></table>`;
 }
 function billingView() {
   const subTotal = billItems.reduce((sum, item) => {
@@ -220,20 +163,20 @@ function billingView() {
     )}</div></div></section><aside class="form-panel billing-summary"><div class="panel-head"><div><h3>Payment summary</h3><p>Token #${nextToken()}</p></div><span class="status received">Received</span></div><div class="summary-line"><span>Subtotal</span><strong>${money(subTotal)}</strong></div><div class="form-field"><label>Discount <small>optional</small></label><input id="billDiscount" type="number" min="0" value="0" placeholder="0"></div><div class="form-field"><label>Advance paid</label><input id="billPaid" type="number" min="0" value="0" placeholder="0"></div><div class="summary-line total"><span>Total</span><strong id="billTotal">${money(subTotal)}</strong></div><div class="summary-line due"><span>Balance due</span><strong id="billDue">${money(subTotal)}</strong></div><button id="saveOrder" class="button primary wide">Save order <span>→</span></button><div class="note-box">The customer’s token and delivery date will appear on their receipt. You can print it right after saving.</div></aside></div>`;
 }
 function ordersView() {
-  return `<div class="section-head"><div><span class="eyebrow">WORK QUEUE</span><h2>Orders</h2></div><button class="button primary" data-view="billing">＋ New order</button></div><section class="panel table-panel"><div class="table-toolbar"><input class="search-input" id="orderSearch" placeholder="Search token or customer..."><div class="filter-row">${["All", "Received", "Ready", "Delivered"].map((f) => `<button class="filter-button ${orderFilter === f ? "active" : ""}" data-filter="${f}">${f}</button>`).join("")}</div></div><div id="ordersTable">${ordersTable(data.orders.filter((o) => orderFilter === "All" || o.status === orderFilter))}</div></section>`;
+  return `<div class="section-head"><div><span class="eyebrow">WORK QUEUE</span><h2>Orders</h2></div><div class="row-actions"><button class="button danger" id="resetOrders">Reset orders</button><button class="button primary" data-view="billing">＋ New order</button></div></div><section class="panel table-panel"><div class="table-toolbar"><input class="search-input" id="orderSearch" placeholder="Search token or customer..."><div class="filter-row">${["All", "Received", "Ready", "Delivered"].map((f) => `<button class="filter-button ${orderFilter === f ? "active" : ""}" data-filter="${f}">${f}</button>`).join("")}</div></div><div id="ordersTable">${ordersTable(data.orders.filter((o) => orderFilter === "All" || o.status === orderFilter))}</div></section>`;
 }
 function customersView() {
-  return `<div class="section-head"><div><span class="eyebrow">CUSTOMER BOOK</span><h2>Customers</h2></div><button class="button primary" id="addCustomer">＋ Add customer</button></div><section class="panel table-panel"><div class="table-toolbar"><input class="search-input" id="customerSearch" placeholder="Search by phone number..."><span class="muted">${data.customers.length} customers</span></div><table><thead><tr><th>Name</th><th>Phone</th><th>Orders</th><th>Total spent</th></tr></thead><tbody id="customersTable">${customerRows(data.customers)}</tbody></table></section>`;
+  return `<div class="section-head"><div><span class="eyebrow">CUSTOMER BOOK</span><h2>Customers</h2></div><button class="button primary" id="addCustomer">＋ Add customer</button></div><section class="panel table-panel"><div class="table-toolbar"><input class="search-input" id="customerSearch" placeholder="Search by phone number..."><span class="muted">${data.customers.length} customers</span></div><table><thead><tr><th>Name</th><th>Phone</th><th>Orders</th><th>Total spent</th><th></th></tr></thead><tbody id="customersTable">${customerRows(data.customers)}</tbody></table></section>`;
 }
 function customerRows(customers) {
   return (
     customers
       .map((c) => {
         const orders = data.orders.filter((o) => o.customerId === c.id);
-        return `<tr><td><strong>${c.name}</strong></td><td>${c.phone}</td><td>${orders.length}</td><td class="amount">${money(orders.reduce((s, o) => s + o.total, 0))}</td></tr>`;
+        return `<tr><td><strong>${c.name}</strong></td><td>${c.phone}</td><td>${orders.length}</td><td class="amount">${money(orders.reduce((s, o) => s + o.total, 0))}</td><td><button class="small-action danger" data-delete-customer="${c.id}">Remove</button></td></tr>`;
       })
       .join("") ||
-    '<tr><td colspan="4" class="empty-state">No customers match that phone number.</td></tr>'
+    '<tr><td colspan="5" class="empty-state">No customers match that phone number.</td></tr>'
   );
 }
 function servicesView() {
@@ -248,9 +191,10 @@ function inventoryView() {
     })
     .join("")}</div>`;
 }
-function openModal(title, body, onSave) {
+function openModal(title, body, onSave, saveLabel = "Save") {
   const root = document.getElementById("modalRoot");
-  root.innerHTML = `<div class="modal-backdrop"><form class="modal" id="activeModal"><h2>${title}</h2>${body}<div class="modal-actions"><button type="button" class="button ghost" id="closeModal">Cancel</button><button class="button primary" type="submit">Save</button></div></form></div>`;
+  const modalClass = saveLabel !== "Save" ? "modal danger" : "modal";
+  root.innerHTML = `<div class="modal-backdrop"><form class="${modalClass}" id="activeModal"><h2>${title}</h2>${body}<div class="modal-actions"><button type="button" class="button ghost" id="closeModal">Cancel</button><button class="button ${saveLabel !== "Save" ? "danger" : "primary"}" type="submit">${saveLabel}</button></div></form></div>`;
   root.querySelector("#closeModal").onclick = () => (root.innerHTML = "");
   root.querySelector("#activeModal").onsubmit = (e) => {
     e.preventDefault();
@@ -320,6 +264,12 @@ function bindViewEvents() {
   document
     .querySelectorAll("[data-status]")
     .forEach((b) => (b.onclick = () => cycleStatus(b.dataset.status)));
+  document
+    .querySelectorAll("[data-pay]")
+    .forEach((b) => (b.onclick = () => markOrderPaid(b.dataset.pay)));
+  document
+    .querySelectorAll("[data-delete-customer]")
+    .forEach((b) => (b.onclick = () => removeCustomer(b.dataset.deleteCustomer)));
   if (document.getElementById("addCustomer"))
     document.getElementById("addCustomer").onclick = customerModal;
   if (document.getElementById("quickCustomer"))
@@ -343,6 +293,8 @@ function bindViewEvents() {
         render();
       }),
   );
+  if (document.getElementById("resetOrders"))
+    document.getElementById("resetOrders").onclick = resetOrders;
   const search = document.getElementById("orderSearch");
   if (search)
     search.oninput = () => {
@@ -467,6 +419,49 @@ function saveOrder() {
   printReceipt(order.id);
   billItems = [{ serviceId: data.services[0].id, qty: 1 }];
   setView("orders");
+}
+function markOrderPaid(id) {
+  const order = data.orders.find((o) => o.id === id);
+  if (!order) return;
+  order.paid = order.total;
+  save();
+  render();
+  showToast(`Order #${order.tokenNo} marked fully paid`);
+}
+function resetOrders() {
+  if (!data.orders.length) {
+    showToast("There are no orders to reset");
+    return;
+  }
+  openModal(
+    "Reset all orders?",
+    `<div class="reset-warning"><div class="warning-badge">!</div><div><p>This will clear the current order queue.</p><small>It will also restart the token count from 1.</small></div></div>`,
+    () => {
+      data.orders = [];
+      save();
+      render();
+      showToast("Orders reset");
+    },
+    "Reset orders",
+  );
+}
+function removeCustomer(id) {
+  const customer = data.customers.find((c) => c.id === id);
+  if (!customer) return;
+  openModal(
+    "Remove customer?",
+    `<div class="reset-warning"><div class="warning-badge">!</div><div><p>This will delete ${customer.name} from the customer book.</p><small>Orders tied to this customer will remain, but the customer name will no longer appear.</small></div></div>`,
+    () => {
+      data.customers = data.customers.filter((c) => c.id !== id);
+      data.orders = data.orders.map((order) =>
+        order.customerId === id ? { ...order, customerId: "" } : order,
+      );
+      save();
+      render();
+      showToast(`${customer.name} removed`);
+    },
+    "Remove",
+  );
 }
 function cycleStatus(id) {
   const order = data.orders.find((o) => o.id === id);

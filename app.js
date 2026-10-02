@@ -115,26 +115,20 @@ function dashboardView() {
         : orderDelta === 0
           ? "Same as yesterday"
           : `${orderDelta > 0 ? "+" : ""}${orderDelta} from yesterday`;
-  const days = [
-    "24 Sep",
-    "25 Sep",
-    "26 Sep",
-    "27 Sep",
-    "28 Sep",
-    "29 Sep",
-    "30 Sep",
-  ];
-  const values = [
-    3200,
-    4650,
-    2900,
-    5100,
-    3700,
-    orders.length ? 6800 : 0,
-    income,
-  ];
+  const chartDates = Array.from({ length: 7 }, (_, index) => addDays(today, index - 6));
+  const chartLabels = chartDates.map((date) =>
+    date.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }),
+  );
+  const values = chartDates.map((date) => {
+    const key = dateKey(date);
+    return data.orders
+      .filter((o) => o.date === key)
+      .reduce((sum, order) => sum + Number(order.paid || 0), 0);
+  });
   const max = Math.max(...values, 1);
-  return `<div class="section-head"><div><span class="eyebrow">SHOP PULSE</span><h2>Today at a glance</h2></div><span class="muted">${dateLabel(today)}</span></div><div class="stats-grid"><div class="stat-card"><span class="stat-label">Today’s orders</span><strong>${orders.length}</strong><span class="stat-note">${orderDeltaLabel}</span></div><div class="stat-card"><span class="stat-label">Today’s income</span><strong>${money(income)}</strong><span class="stat-note">Cash collected</span></div><div class="stat-card"><span class="stat-label">Pending payments</span><strong>${money(due)}</strong><span class="stat-note">Across all orders</span></div><div class="stat-card"><span class="stat-label">Ready for pickup</span><strong>${ready}</strong><span class="stat-note">${ready ? "Send a reminder" : "All clear"}</span></div></div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>Sales rhythm</h3><p>Collected income · last 7 days</p></div><span class="eyebrow">NPR</span></div><div class="chart">${values.map((v, i) => `<div class="chart-col"><div class="bar-wrap"><div class="bar ${i === 6 ? "today" : ""}" style="height:${Math.max(7, (v / max) * 100)}%" title="${money(v)}"></div></div><small>${days[i]}</small></div>`).join("")}</div></section><section class="panel"><div class="panel-head"><div><h3>Pickup board</h3><p>Orders that need attention</p></div><button class="small-action" data-view="orders">View all →</button></div><div class="mini-list">${
+  return `<div class="section-head"><div><span class="eyebrow">SHOP PULSE</span><h2>Today at a glance</h2></div><span class="muted">${dateLabel(today)}</span></div><div class="stats-grid"><div class="stat-card"><span class="stat-label">Today’s orders</span><strong>${orders.length}</strong><span class="stat-note">${orderDeltaLabel}</span></div><div class="stat-card"><span class="stat-label">Today’s income</span><strong>${money(income)}</strong><span class="stat-note">Cash collected</span></div><div class="stat-card"><span class="stat-label">Pending payments</span><strong>${money(due)}</strong><span class="stat-note">Across all orders</span></div><div class="stat-card"><span class="stat-label">Ready for pickup</span><strong>${ready}</strong><span class="stat-note">${ready ? "Send a reminder" : "All clear"}</span></div></div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>Sales rhythm</h3><p>Collected income · last 7 days</p></div><span class="eyebrow">NPR</span></div><div class="chart">${values
+    .map((v, i) => `<div class="chart-col"><div class="bar-wrap"><div class="bar ${i === values.length - 1 ? "today" : ""}" style="height:${Math.max(7, (v / max) * 100)}%" title="${money(v)}"></div></div><small>${chartLabels[i]}</small></div>`)
+    .join("")}</div></section><section class="panel"><div class="panel-head"><div><h3>Pickup board</h3><p>Orders that need attention</p></div><button class="small-action" data-view="orders">View all →</button></div><div class="mini-list">${
     data.orders
       .filter((o) => o.status !== "Delivered")
       .slice(0, 5)

@@ -819,6 +819,66 @@ tbody tr:hover {
   gap: 8px;
   margin-top: 22px;
 }
+.receipt-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 16px;
+  overflow: auto;
+  padding: 24px;
+  background: rgba(18, 36, 29, 0.48);
+}
+.receipt-paper {
+  width: min(420px, calc(100vw - 40px));
+  padding: 30px;
+  background: #fff;
+  color: #17251f;
+  box-shadow: var(--shadow);
+  font-family: Arial, sans-serif;
+}
+.receipt-header {
+  padding-bottom: 16px;
+  border-bottom: 2px solid #0f6e63;
+}
+.receipt-header h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+.receipt-header p,
+.receipt-thanks {
+  color: #68756e;
+  font-size: 12px;
+}
+.receipt-header strong {
+  font-size: 14px;
+}
+.receipt-customer {
+  margin: 18px 0 10px;
+  font-size: 13px;
+}
+.receipt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 9px 0;
+  border-bottom: 1px solid #ddd;
+  font-size: 13px;
+}
+.receipt-total {
+  font-weight: 700;
+  font-size: 15px;
+}
+.receipt-thanks {
+  margin-top: 22px;
+}
+.receipt-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
 .toast {
   position: fixed;
   bottom: 24px;

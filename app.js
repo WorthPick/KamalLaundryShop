@@ -1,5 +1,16 @@
 const today = () => new Date();
 const money = (value) => `Rs. ${Number(value || 0).toLocaleString("en-IN")}`;
+const escapeHtml = (value) =>
+  String(value ?? "").replace(/[&<>"']/g, (character) => {
+    const entities = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[character];
+  });
 const dateLabel = (value) =>
   new Date(value).toLocaleDateString("en-IN", {
     day: "2-digit",
@@ -54,8 +65,10 @@ async function save() {
     });
     if (!response.ok) throw new Error("Save failed");
     data = await response.json();
+    return true;
   } catch (error) {
     showToast("Could not save to the shop database");
+    return false;
   }
 }
 const customerName = (id) =>
@@ -194,7 +207,7 @@ function customerRows(customers) {
   );
 }
 function servicesView() {
-  return `<div class="section-head"><div><span class="eyebrow">RATE CARD</span><h2>Services & prices</h2></div><button class="button primary" id="addService">＋ Add service</button></div><section class="panel table-panel"><table><thead><tr><th>Service name</th><th>Price</th><th>Charged by</th><th></th></tr></thead><tbody>${data.services.map((s) => `<tr><td><strong>${s.name}</strong></td><td class="amount">${money(s.price)}</td><td><span class="status delivered">${s.type}</span></td><td><button class="small-action" data-edit-service="${s.id}">Edit</button></td></tr>`).join("")}</tbody></table></section>`;
+  return `<div class="section-head"><div><span class="eyebrow">RATE CARD</span><h2>Services & prices</h2></div><button class="button primary" id="addService">＋ Add service</button></div><section class="panel table-panel"><table><thead><tr><th>Service name</th><th>Price</th><th>Charged by</th><th></th></tr></thead><tbody>${data.services.map((s) => `<tr><td><strong>${s.name}</strong></td><td class="amount">${money(s.price)}</td><td><span class="status delivered">${s.type}</span></td><td><button class="small-action" data-edit-service="${s.id}">Edit</button> <button class="small-action danger" data-delete-service="${s.id}">Remove</button></td></tr>`).join("")}</tbody></table></section>`;
 }
 function inventoryView() {
   return `<div class="section-head"><div><span class="eyebrow">SUPPLY CUPBOARD</span><h2>Inventory</h2></div><button class="button primary" id="addInventory">＋ Add item</button></div><div class="inventory-grid">${data.inventory
@@ -210,9 +223,10 @@ function openModal(title, body, onSave, saveLabel = "Save") {
   const modalClass = saveLabel !== "Save" ? "modal danger" : "modal";
   root.innerHTML = `<div class="modal-backdrop"><form class="${modalClass}" id="activeModal"><h2>${title}</h2>${body}<div class="modal-actions"><button type="button" class="button ghost" id="closeModal">Cancel</button><button class="button ${saveLabel !== "Save" ? "danger" : "primary"}" type="submit">${saveLabel}</button></div></form></div>`;
   root.querySelector("#closeModal").onclick = () => (root.innerHTML = "");
-  root.querySelector("#activeModal").onsubmit = (e) => {
+  root.querySelector("#activeModal").onsubmit = async (e) => {
     e.preventDefault();
-    onSave(new FormData(e.target));
+    const result = await onSave(new FormData(e.target));
+    if (result === false) return;
     root.innerHTML = "";
     render();
   };
@@ -296,6 +310,9 @@ function bindViewEvents() {
   document
     .querySelectorAll("[data-edit-service]")
     .forEach((b) => (b.onclick = () => serviceModal(b.dataset.editService)));
+  document
+    .querySelectorAll("[data-delete-service]")
+    .forEach((b) => (b.onclick = () => removeService(b.dataset.deleteService)));
   if (document.getElementById("addInventory"))
     document.getElementById("addInventory").onclick = inventoryModal;
   document
@@ -507,6 +524,33 @@ function removeInventoryItem(id) {
     "Remove",
   );
 }
+function removeService(id) {
+  const service = serviceById(id);
+  if (!service) return;
+  const ordersUsingService = data.orders.filter((order) =>
+    order.items?.some((item) => item.serviceId === id),
+  );
+  if (ordersUsingService.length) {
+    showToast(
+      `Cannot remove ${service.name}; it is used in ${ordersUsingService.length} existing order${ordersUsingService.length === 1 ? "" : "s"}`,
+    );
+    return;
+  }
+  openModal(
+    "Remove service?",
+    `<div class="reset-warning"><div class="warning-badge">!</div><div><p>This will remove ${service.name} from the service list.</p><small>Services used by existing orders cannot be removed.</small></div></div>`,
+    async () => {
+      data.services = data.services.filter((entry) => entry.id !== id);
+      if (!(await save())) {
+        data.services.push(service);
+        return false;
+      }
+      showToast(`${service.name} removed`);
+      return true;
+    },
+    "Remove",
+  );
+}
 function cycleStatus(id) {
   const order = data.orders.find((o) => o.id === id);
   const statuses = ["Received", "Ready", "Delivered"];
@@ -533,15 +577,60 @@ function changeStock(id, change) {
 }
 function printReceipt(id) {
   const o = data.orders.find((x) => x.id === id);
-  const w = window.open("", "_blank", "width=500,height=700");
-  if (!w) {
-    showToast("Please allow pop-ups to print receipts");
+  if (!o) {
+    showToast("Could not find this order to print");
     return;
   }
-  w.document.write(
-    `<html><head><title>Receipt #${o.tokenNo}</title><style>body{font-family:Arial,sans-serif;padding:30px;color:#17251f}h1{font-size:22px;margin:0 0 4px}p{color:#68756e;font-size:12px}.top{border-bottom:2px solid #0f6e63;padding-bottom:20px}.row{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding:10px 0;font-size:13px}.total{font-weight:bold;font-size:16px}.small{font-size:11px;margin-top:25px}</style></head><body><div class="top"><h1>Kamal Power Laundry</h1><p>CARE · PRESS · RETURN</p><strong>RECEIPT #${o.tokenNo}</strong><p>${dateLabel(o.date)} · Delivery: ${dateLabel(o.deliveryDate)}</p></div><p><b>Customer:</b> ${customerName(o.customerId)}</p>${o.items.map((i) => `<div class="row"><span>${serviceName(i.serviceId)} × ${i.qty}</span><span>${money(i.amount)}</span></div>`).join("")}<div class="row"><span>Subtotal</span><span>${money(o.total + o.discount)}</span></div><div class="row"><span>Discount</span><span>- ${money(o.discount)}</span></div><div class="row total"><span>Total</span><span>${money(o.total)}</span></div><div class="row"><span>Advance paid</span><span>${money(o.paid)}</span></div><div class="row total"><span>Balance due</span><span>${money(o.total - o.paid)}</span></div><p class="small">Please bring this token when collecting your clothes. Thank you.</p><script>window.print();<\/script></body></html>`,
-  );
-  w.document.close();
+  const items = (o.items || [])
+    .map(
+      (item) =>
+        `<div class="receipt-row"><span>${escapeHtml(serviceName(item.serviceId))} × ${escapeHtml(item.qty)}</span><span>${money(item.amount)}</span></div>`,
+    )
+    .join("");
+  const root = document.getElementById("modalRoot");
+  const receiptMarkup = `<section class="receipt-paper" id="receiptPrintTarget"><header class="receipt-header"><h1>Kamal Power Laundry</h1><p>CARE · PRESS · RETURN</p><strong>RECEIPT #${escapeHtml(o.tokenNo)}</strong><p>${escapeHtml(dateLabel(o.date))} · Delivery: ${escapeHtml(dateLabel(o.deliveryDate))}</p></header><p class="receipt-customer"><strong>Customer:</strong> ${escapeHtml(customerName(o.customerId))}</p>${items}<div class="receipt-row"><span>Subtotal</span><span>${money(o.total + o.discount)}</span></div><div class="receipt-row"><span>Discount</span><span>− ${money(o.discount)}</span></div><div class="receipt-row receipt-total"><span>Total</span><span>${money(o.total)}</span></div><div class="receipt-row"><span>Advance paid</span><span>${money(o.paid)}</span></div><div class="receipt-row receipt-total"><span>Balance due</span><span>${money(o.total - o.paid)}</span></div><p class="receipt-thanks">Please bring this token when collecting your clothes. Thank you.</p></section>`;
+  root.innerHTML = `<div class="receipt-preview-backdrop">${receiptMarkup}<div class="receipt-actions"><button class="button ghost" id="closeReceipt">Close</button><button class="button primary" id="printReceiptButton">Print receipt</button></div></div>`;
+  root.querySelector("#closeReceipt").onclick = () => {
+    root.innerHTML = "";
+  };
+  root.querySelector("#printReceiptButton").onclick = () => {
+    const receipt = document.getElementById("receiptPrintTarget");
+    const measurement = receipt.cloneNode(true);
+    measurement.removeAttribute("id");
+    measurement.style.cssText =
+      "position:fixed;left:-10000px;top:0;width:80mm;box-sizing:border-box;padding:4mm;box-shadow:none";
+    document.body.append(measurement);
+    const pageHeightMm = Math.ceil(
+      (measurement.scrollHeight * 25.4) / 96 + 2,
+    );
+    measurement.remove();
+    const printWindow = window.open("", "_blank", "width=420,height=700");
+    if (!printWindow) {
+      showToast("Allow pop-ups to open the receipt print page");
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title></title><style>
+      @page { size: 80mm ${pageHeightMm}mm; margin: 0; }
+      * { box-sizing: border-box; }
+      html, body { width: 80mm; margin: 0; padding: 0; background: #fff; color: #17251f; font-family: Arial, sans-serif; }
+      .receipt-paper { width: 80mm; margin: 0; padding: 4mm; box-shadow: none; }
+      .receipt-header { padding-bottom: 4mm; border-bottom: 2px solid #0f6e63; }
+      .receipt-header h1 { margin: 0 0 1mm; font-size: 16pt; }
+      .receipt-header p, .receipt-thanks { color: #444; font-size: 9pt; }
+      .receipt-header strong { font-size: 10pt; }
+      .receipt-customer { margin: 4mm 0 2mm; font-size: 9pt; }
+      .receipt-row { display: flex; justify-content: space-between; gap: 4mm; padding: 2mm 0; border-bottom: 1px solid #ccc; font-size: 9pt; }
+      .receipt-total { font-weight: 700; font-size: 10pt; }
+      .receipt-thanks { margin: 5mm 0 0; }
+    </style></head><body>${receiptMarkup}</body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.addEventListener("afterprint", () => printWindow.close(), {
+      once: true,
+    });
+    printWindow.print();
+  };
 }
 document.getElementById("loginForm").onsubmit = async (e) => {
   e.preventDefault();

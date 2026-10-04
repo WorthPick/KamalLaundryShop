@@ -569,6 +569,18 @@ tbody tr:hover {
   background: #fff5d6;
   color: #8b6a16;
 }
+.status.unpaid {
+  background: #edf0ef;
+  color: #68756e;
+}
+.status.partially-paid {
+  background: #fff5d6;
+  color: #8b6a16;
+}
+.status.paid {
+  background: #dff2ea;
+  color: var(--teal);
+}
 .status.ready {
   background: #dff2ea;
   color: var(--teal);

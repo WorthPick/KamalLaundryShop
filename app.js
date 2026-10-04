@@ -1,4 +1,4 @@
-const today = new Date();
+const today = () => new Date();
 const money = (value) => `Rs. ${Number(value || 0).toLocaleString("en-IN")}`;
 const dateLabel = (value) =>
   new Date(value).toLocaleDateString("en-IN", {
@@ -18,7 +18,7 @@ const addDays = (value, days) => {
   date.setDate(date.getDate() + days);
   return date;
 };
-const currentDateKey = dateKey(today);
+const currentDateKey = () => dateKey(today());
 const uid = (prefix) =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const seedData = {
@@ -36,12 +36,12 @@ const seedData = {
 let data = seedData;
 let currentView = "dashboard";
 let orderFilter = "All";
-let billItems = [{ serviceId: "s1", qty: 1 }];
+let billItems = [];
 async function loadServerData() {
   const response = await fetch("/api/state");
   if (!response.ok) throw new Error("Could not load shop data");
   data = await response.json();
-  if (data.services.length && !data.services.some((service) => service.id === billItems[0]?.serviceId)) {
+  if (billItems.length && data.services.length && !data.services.some((service) => service.id === billItems[0]?.serviceId)) {
     billItems = [{ serviceId: data.services[0].id, qty: 1 }];
   }
 }
@@ -64,7 +64,7 @@ const serviceName = (id) =>
   data.services.find((s) => s.id === id)?.name || "Service";
 const serviceById = (id) => data.services.find((s) => s.id === id);
 const statusClass = (status) => status.toLowerCase();
-const todayOrders = () => data.orders.filter((o) => o.date === currentDateKey);
+const todayOrders = () => data.orders.filter((o) => o.date === currentDateKey());
 const nextToken = () =>
   Math.max(0, ...data.orders.map((o) => Number(o.tokenNo))) + 1;
 function showToast(message) {
@@ -73,13 +73,29 @@ function showToast(message) {
   el.classList.add("show");
   setTimeout(() => el.classList.remove("show"), 2600);
 }
+function updateHeaderClock() {
+  const now = today();
+  const hour = now.getHours();
+  const greeting =
+    hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  document.getElementById("pageKicker").textContent = now
+    .toLocaleDateString("en-IN", {
+      weekday: "long",
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    })
+    .toUpperCase();
+  if (currentView === "dashboard")
+    document.getElementById("pageTitle").textContent = `${greeting}, Kamal`;
+}
 function setView(view) {
   currentView = view;
   document
     .querySelectorAll(".nav-item")
     .forEach((b) => b.classList.toggle("active", b.dataset.view === view));
   const titles = {
-    dashboard: "Good morning, Kamal",
+    dashboard: "",
     billing: "Create a new order",
     orders: "Orders queue",
     customers: "Customers",
@@ -87,6 +103,7 @@ function setView(view) {
     inventory: "Inventory",
   };
   document.getElementById("pageTitle").textContent = titles[view];
+  if (view === "dashboard") updateHeaderClock();
   render();
 }
 function render() {
@@ -104,7 +121,8 @@ function dashboardView() {
   const income = orders.reduce((sum, o) => sum + o.paid, 0);
   const due = data.orders.reduce((sum, o) => sum + (o.total - o.paid), 0);
   const ready = data.orders.filter((o) => o.status === "Ready").length;
-  const yesterdayKey = dateKey(addDays(today, -1));
+  const now = today();
+  const yesterdayKey = dateKey(addDays(now, -1));
   const yesterdayOrders = data.orders.filter((o) => o.date === yesterdayKey).length;
   const orderDelta = orders.length - yesterdayOrders;
   const orderDeltaLabel =
@@ -115,7 +133,9 @@ function dashboardView() {
         : orderDelta === 0
           ? "Same as yesterday"
           : `${orderDelta > 0 ? "+" : ""}${orderDelta} from yesterday`;
-  const chartDates = Array.from({ length: 7 }, (_, index) => addDays(today, index - 6));
+  const chartDates = Array.from({ length: 7 }, (_, index) =>
+    addDays(now, index - 6),
+  );
   const chartLabels = chartDates.map((date) =>
     date.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }),
   );
@@ -126,7 +146,7 @@ function dashboardView() {
       .reduce((sum, order) => sum + Number(order.paid || 0), 0);
   });
   const max = Math.max(...values, 1);
-  return `<div class="section-head"><div><span class="eyebrow">SHOP PULSE</span><h2>Today at a glance</h2></div><span class="muted">${dateLabel(today)}</span></div><div class="stats-grid"><div class="stat-card"><span class="stat-label">Today’s orders</span><strong>${orders.length}</strong><span class="stat-note">${orderDeltaLabel}</span></div><div class="stat-card"><span class="stat-label">Today’s income</span><strong>${money(income)}</strong><span class="stat-note">Cash collected</span></div><div class="stat-card"><span class="stat-label">Pending payments</span><strong>${money(due)}</strong><span class="stat-note">Across all orders</span></div><div class="stat-card"><span class="stat-label">Ready for pickup</span><strong>${ready}</strong><span class="stat-note">${ready ? "Send a reminder" : "All clear"}</span></div></div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>Sales rhythm</h3><p>Collected income · last 7 days</p></div><span class="eyebrow">NPR</span></div><div class="chart">${values
+  return `<div class="section-head"><div><span class="eyebrow">SHOP PULSE</span><h2>Today at a glance</h2></div><span class="muted">${dateLabel(now)}</span></div><div class="stats-grid"><div class="stat-card"><span class="stat-label">Today’s orders</span><strong>${orders.length}</strong><span class="stat-note">${orderDeltaLabel}</span></div><div class="stat-card"><span class="stat-label">Today’s income</span><strong>${money(income)}</strong><span class="stat-note">Cash collected</span></div><div class="stat-card"><span class="stat-label">Pending payments</span><strong>${money(due)}</strong><span class="stat-note">Across all orders</span></div><div class="stat-card"><span class="stat-label">Ready for pickup</span><strong>${ready}</strong><span class="stat-note">${ready ? "Send a reminder" : "All clear"}</span></div></div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>Sales rhythm</h3><p>Collected income · last 7 days</p></div><span class="eyebrow">NPR</span></div><div class="chart">${values
     .map((v, i) => `<div class="chart-col"><div class="bar-wrap"><div class="bar ${i === values.length - 1 ? "today" : ""}" style="height:${Math.max(7, (v / max) * 100)}%" title="${money(v)}"></div></div><small>${chartLabels[i]}</small></div>`)
     .join("")}</div></section><section class="panel"><div class="panel-head"><div><h3>Pickup board</h3><p>Orders that need attention</p></div><button class="small-action" data-view="orders">View all →</button></div><div class="mini-list">${
     data.orders
@@ -147,14 +167,14 @@ function billingView() {
     const s = serviceById(item.serviceId);
     return sum + (s ? s.price * Number(item.qty || 0) : 0);
   }, 0);
-  return `<div class="section-head"><div><span class="eyebrow">FRONT COUNTER</span><h2>New order <span class="eyebrow" style="vertical-align:middle">TOKEN #${nextToken()}</span></h2></div><span class="muted">Delivery dates are auto-filled</span></div><div class="form-layout"><section class="form-panel"><div class="form-grid"><div class="form-field field-full"><label>Customer</label><div class="add-customer-line"><select id="billCustomer"><option value="">Select customer</option>${data.customers.map((c) => `<option value="${c.id}">${c.name} · ${c.phone}</option>`).join("")}</select><button class="button secondary" id="quickCustomer">＋ Add</button></div></div><div class="form-field"><label>Order date</label><input value="${dateLabel(today)}" disabled></div><div class="form-field"><label>Delivery date</label><input id="deliveryDate" type="date" value="${dateKey(addDays(today, 2))}"></div></div><div style="border-top:1px solid var(--line);padding-top:22px;margin-top:6px"><div class="section-head" style="margin-bottom:13px"><div><h3 style="margin:0;font-size:15px">Laundry items</h3><p style="font-size:11px;margin-top:5px">Choose a service, then add quantity or weight.</p></div><button class="button secondary" id="addItem">＋ Add item</button></div><div class="item-head"><span>Service</span><span>Qty / kg</span><span>Amount</span><span></span></div><div id="billItems">${billItems
+  return `<div class="section-head"><div><span class="eyebrow">FRONT COUNTER</span><h2>New order <span class="eyebrow" style="vertical-align:middle">TOKEN #${nextToken()}</span></h2></div><span class="muted">Delivery dates are auto-filled</span></div><div class="form-layout"><section class="form-panel"><div class="form-grid"><div class="form-field field-full"><label>Customer</label><div class="add-customer-line"><select id="billCustomer"><option value="">Select customer</option>${data.customers.map((c) => `<option value="${c.id}">${c.name} · ${c.phone}</option>`).join("")}</select><button class="button secondary" id="quickCustomer">＋ Add</button></div></div><div class="form-field"><label>Order date</label><input value="${dateLabel(today())}" disabled></div><div class="form-field"><label>Delivery date</label><input id="deliveryDate" type="date" value="${dateKey(addDays(today(), 2))}"></div></div><div style="border-top:1px solid var(--line);padding-top:22px;margin-top:6px"><div class="section-head" style="margin-bottom:13px"><div><h3 style="margin:0;font-size:15px">Laundry items</h3><p style="font-size:11px;margin-top:5px">Choose a service, then add quantity or weight.</p></div><button class="button secondary" id="addItem">＋ Add item</button></div><div class="item-head"><span>Service</span><span>Qty / kg</span><span>Amount</span><span></span></div><div id="billItems">${billItems
     .map((item, index) => {
       const s = serviceById(item.serviceId);
       return `<div class="item-row"><select data-item-service="${index}">${data.services.map((x) => `<option value="${x.id}" ${x.id === item.serviceId ? "selected" : ""}>${x.name} · ${x.type}</option>`).join("")}</select><input type="number" min="0.1" step="0.1" value="${item.qty}" data-item-qty="${index}"><span class="line-total">${money(s ? s.price * item.qty : 0)}</span><button class="remove-item" data-remove-item="${index}">×</button></div>`;
     })
     .join(
       "",
-    )}</div></div></section><aside class="form-panel billing-summary"><div class="panel-head"><div><h3>Payment summary</h3><p>Token #${nextToken()}</p></div><span class="status received">Received</span></div><div class="summary-line"><span>Subtotal</span><strong>${money(subTotal)}</strong></div><div class="form-field"><label>Discount <small>optional</small></label><input id="billDiscount" type="number" min="0" value="0" placeholder="0"></div><div class="form-field"><label>Advance paid</label><input id="billPaid" type="number" min="0" value="0" placeholder="0"></div><div class="summary-line total"><span>Total</span><strong id="billTotal">${money(subTotal)}</strong></div><div class="summary-line due"><span>Balance due</span><strong id="billDue">${money(subTotal)}</strong></div><button id="saveOrder" class="button primary wide">Save order <span>→</span></button><div class="note-box">The customer’s token and delivery date will appear on their receipt. You can print it right after saving.</div></aside></div>`;
+    )}</div>${billItems.length ? "" : '<p class="muted">No services added yet. Choose “Add item” to begin.</p>'}</div></section><aside class="form-panel billing-summary"><div class="panel-head"><div><h3>Payment summary</h3><p>Token #${nextToken()}</p></div><span class="status unpaid payment-status">Unpaid</span></div><div class="summary-line"><span>Subtotal</span><strong>${money(subTotal)}</strong></div><div class="form-field"><label>Discount <small>optional</small></label><input id="billDiscount" type="number" min="0" value="0" placeholder="0"></div><div class="form-field"><label>Advance paid</label><input id="billPaid" type="number" min="0" value="0" placeholder="0"></div><div class="summary-line total"><span>Total</span><strong id="billTotal">${money(subTotal)}</strong></div><div class="summary-line due"><span>Balance due</span><strong id="billDue">${money(subTotal)}</strong></div><button id="saveOrder" class="button primary wide">Save order <span>→</span></button><div class="note-box">The customer’s token and delivery date will appear on their receipt. You can print it right after saving.</div></aside></div>`;
 }
 function ordersView() {
   return `<div class="section-head"><div><span class="eyebrow">WORK QUEUE</span><h2>Orders</h2></div><div class="row-actions"><button class="button danger" id="resetOrders">Reset orders</button><button class="button primary" data-view="billing">＋ New order</button></div></div><section class="panel table-panel"><div class="table-toolbar"><input class="search-input" id="orderSearch" placeholder="Search token or customer..."><div class="filter-row">${["All", "Received", "Ready", "Delivered"].map((f) => `<button class="filter-button ${orderFilter === f ? "active" : ""}" data-filter="${f}">${f}</button>`).join("")}</div></div><div id="ordersTable">${ordersTable(data.orders.filter((o) => orderFilter === "All" || o.status === orderFilter))}</div></section>`;
@@ -181,7 +201,7 @@ function inventoryView() {
     .map((i) => {
       const low = i.stock < i.minStock;
       const percent = Math.min((i.stock / i.minStock) * 100, 100);
-      return `<div class="inventory-card ${low ? "low" : ""}"><h3>${i.name}</h3><span class="muted">Minimum level: ${i.minStock} ${i.unit}</span><div class="stock-count">${i.stock} <span>${i.unit}</span></div>${low ? '<span class="low-warning">● LOW STOCK · RESTOCK SOON</span>' : '<span class="low-warning" style="color:var(--teal)">● STOCK LEVEL OK</span>'}<div class="progress"><span style="width:${percent}%"></span></div><div class="row-actions"><button class="button ghost" data-stock="${i.id}" data-change="reduce">− Reduce</button><button class="button secondary" data-stock="${i.id}" data-change="add">＋ Add stock</button></div></div>`;
+      return `<div class="inventory-card ${low ? "low" : ""}"><h3>${i.name}</h3><span class="muted">Minimum level: ${i.minStock} ${i.unit}</span><div class="stock-count">${i.stock} <span>${i.unit}</span></div>${low ? '<span class="low-warning">● LOW STOCK · RESTOCK SOON</span>' : '<span class="low-warning" style="color:var(--teal)">● STOCK LEVEL OK</span>'}<div class="progress"><span style="width:${percent}%"></span></div><div class="row-actions"><button class="button ghost" data-stock="${i.id}" data-change="reduce">− Reduce</button><button class="button secondary" data-stock="${i.id}" data-change="add">＋ Add stock</button><button class="button danger" data-delete-inventory="${i.id}">Remove</button></div></div>`;
     })
     .join("")}</div>`;
 }
@@ -264,6 +284,9 @@ function bindViewEvents() {
   document
     .querySelectorAll("[data-delete-customer]")
     .forEach((b) => (b.onclick = () => removeCustomer(b.dataset.deleteCustomer)));
+  document
+    .querySelectorAll("[data-delete-inventory]")
+    .forEach((b) => (b.onclick = () => removeInventoryItem(b.dataset.deleteInventory)));
   if (document.getElementById("addCustomer"))
     document.getElementById("addCustomer").onclick = customerModal;
   if (document.getElementById("quickCustomer"))
@@ -325,10 +348,8 @@ function bindBillingEvents() {
   document.querySelectorAll("[data-remove-item]").forEach(
     (b) =>
       (b.onclick = () => {
-        if (billItems.length > 1) {
-          billItems.splice(Number(b.dataset.removeItem), 1);
-          render();
-        }
+        billItems.splice(Number(b.dataset.removeItem), 1);
+        render();
       }),
   );
   document.querySelectorAll("[data-item-service]").forEach(
@@ -362,6 +383,17 @@ function billNumbers() {
 }
 function updateBillTotals() {
   const n = billNumbers();
+  const paymentStatus =
+    n.total === 0 || n.paid === 0
+      ? "Unpaid"
+      : n.paid >= n.total
+        ? "Paid"
+        : "Partially paid";
+  const paymentBadge = document.querySelector(".billing-summary .payment-status");
+  if (paymentBadge) {
+    paymentBadge.textContent = paymentStatus;
+    paymentBadge.className = `status ${paymentStatus.toLowerCase().replace(" ", "-")} payment-status`;
+  }
   document.getElementById("billTotal").textContent = money(n.total);
   document.getElementById("billDue").textContent = money(
     Math.max(0, n.total - n.paid),
@@ -376,6 +408,10 @@ function updateBillTotals() {
     );
 }
 function saveOrder() {
+  if (!billItems.length) {
+    showToast("Add a service to the order first");
+    return;
+  }
   if (!data.services.length) {
     showToast("Add a service and price first");
     return;
@@ -394,7 +430,7 @@ function saveOrder() {
     id: uid("o"),
     tokenNo: nextToken(),
     customerId: customer,
-    date: currentDateKey,
+    date: currentDateKey(),
     deliveryDate: document.getElementById("deliveryDate").value,
     status: "Received",
     total: n.total,
@@ -411,7 +447,7 @@ function saveOrder() {
   save();
   showToast(`Order #${order.tokenNo} saved`);
   printReceipt(order.id);
-  billItems = [{ serviceId: data.services[0].id, qty: 1 }];
+  billItems = [];
   setView("orders");
 }
 function markOrderPaid(id) {
@@ -453,6 +489,20 @@ function removeCustomer(id) {
       save();
       render();
       showToast(`${customer.name} removed`);
+    },
+    "Remove",
+  );
+}
+function removeInventoryItem(id) {
+  const item = data.inventory.find((entry) => entry.id === id);
+  if (!item) return;
+  openModal(
+    "Remove inventory item?",
+    `<div class="reset-warning"><div class="warning-badge">!</div><div><p>This will remove ${item.name} from inventory.</p><small>This action cannot be undone.</small></div></div>`,
+    () => {
+      data.inventory = data.inventory.filter((entry) => entry.id !== id);
+      save();
+      showToast(`${item.name} removed from inventory`);
     },
     "Remove",
   );
@@ -508,6 +558,7 @@ document.getElementById("loginForm").onsubmit = async (e) => {
     });
     if (!response.ok) throw new Error("Incorrect username or password");
     await loadServerData();
+    updateHeaderClock();
     document.getElementById("loginView").classList.add("hidden");
     document.getElementById("appView").classList.remove("hidden");
     render();
@@ -535,3 +586,13 @@ document.addEventListener("keydown", (e) => {
   )
     setView("billing");
 });
+let displayedDate = dateKey(today());
+setInterval(() => {
+  const currentDate = dateKey(today());
+  if (currentDate !== displayedDate) {
+    displayedDate = currentDate;
+    if (currentView === "dashboard") render();
+  }
+  updateHeaderClock();
+}, 60_000);
+updateHeaderClock();

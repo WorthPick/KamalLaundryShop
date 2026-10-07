@@ -56,6 +56,13 @@ async function loadServerData() {
     billItems = [{ serviceId: data.services[0].id, qty: 1 }];
   }
 }
+async function loadInventoryData() {
+  const response = await fetch("/api/inventory");
+  if (!response.ok) throw new Error("Could not load inventory");
+  data.inventory = await response.json();
+  return data.inventory;
+}
+window.loadInventoryData = loadInventoryData;
 async function save() {
   try {
     const response = await fetch("/api/state", {
@@ -104,6 +111,7 @@ function updateHeaderClock() {
 }
 function setView(view) {
   currentView = view;
+  window.currentView = view;
   document
     .querySelectorAll(".nav-item")
     .forEach((b) => b.classList.toggle("active", b.dataset.view === view));
@@ -114,6 +122,7 @@ function setView(view) {
     customers: "Customers",
     services: "Services & prices",
     inventory: "Inventory",
+    suppliers: "Suppliers & purchases",
   };
   document.getElementById("pageTitle").textContent = titles[view];
   if (view === "dashboard") updateHeaderClock();
@@ -127,6 +136,8 @@ function render() {
   if (currentView === "customers") content.innerHTML = customersView();
   if (currentView === "services") content.innerHTML = servicesView();
   if (currentView === "inventory") content.innerHTML = inventoryView();
+  if (currentView === "suppliers")
+    content.innerHTML = window.SupplierModule.render(data.inventory);
   bindViewEvents();
 }
 function dashboardView() {
@@ -212,9 +223,9 @@ function servicesView() {
 function inventoryView() {
   return `<div class="section-head"><div><span class="eyebrow">SUPPLY CUPBOARD</span><h2>Inventory</h2></div><button class="button primary" id="addInventory">＋ Add item</button></div><div class="inventory-grid">${data.inventory
     .map((i) => {
-      const low = i.stock < i.minStock;
-      const percent = Math.min((i.stock / i.minStock) * 100, 100);
-      return `<div class="inventory-card ${low ? "low" : ""}"><h3>${i.name}</h3><span class="muted">Minimum level: ${i.minStock} ${i.unit}</span><div class="stock-count">${i.stock} <span>${i.unit}</span></div>${low ? '<span class="low-warning">● LOW STOCK · RESTOCK SOON</span>' : '<span class="low-warning" style="color:var(--teal)">● STOCK LEVEL OK</span>'}<div class="progress"><span style="width:${percent}%"></span></div><div class="row-actions"><button class="button ghost" data-stock="${i.id}" data-change="reduce">− Reduce</button><button class="button secondary" data-stock="${i.id}" data-change="add">＋ Add stock</button><button class="button danger" data-delete-inventory="${i.id}">Remove</button></div></div>`;
+      const low = i.stock <= i.minStock;
+      const percent = i.minStock > 0 ? Math.min((i.stock / i.minStock) * 100, 100) : 100;
+      return `<div class="inventory-card ${low ? "low" : ""}"><h3>${i.name}</h3><span class="muted">Minimum level: ${i.minStock} ${i.unit}</span><div class="stock-count">${i.stock} <span>${i.unit}</span></div>${low ? '<span class="low-warning">● LOW STOCK · RESTOCK SOON</span>' : '<span class="low-warning" style="color:var(--teal)">● STOCK LEVEL OK</span>'}<div class="progress"><span style="width:${percent}%"></span></div><div class="row-actions"><button class="button ghost" data-stock="${i.id}" data-change="reduce">− Reduce</button><button class="button secondary" data-stock="${i.id}" data-change="add">＋ Add stock</button><button class="button ghost" data-stock="${i.id}" data-change="adjust">± Adjust</button><button class="button danger" data-delete-inventory="${i.id}">Remove</button></div></div>`;
     })
     .join("")}</div>`;
 }
@@ -269,16 +280,26 @@ function inventoryModal() {
   openModal(
     "Add inventory item",
     '<div class="form-field"><label>Item name</label><input name="name" required placeholder="e.g. Packaging bags"></div><div class="form-grid"><div class="form-field"><label>Current stock</label><input name="stock" type="number" min="0" required></div><div class="form-field"><label>Unit</label><input name="unit" required placeholder="pcs / kg"></div><div class="form-field field-full"><label>Minimum stock level</label><input name="minStock" type="number" min="0" required></div></div>',
-    (form) => {
-      data.inventory.push({
-        id: uid("i"),
-        name: form.get("name"),
-        stock: Number(form.get("stock")),
-        unit: form.get("unit"),
-        minStock: Number(form.get("minStock")),
-      });
-      save();
-      showToast("Inventory item added");
+    async (form) => {
+      try {
+        const response = await fetch("/api/inventory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: form.get("name"),
+            stock: Number(form.get("stock")),
+            unit: form.get("unit"),
+            min_stock: Number(form.get("minStock")),
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Could not add inventory item");
+        await loadServerData();
+        showToast("Inventory item added");
+      } catch (error) {
+        showToast(error.message);
+        return false;
+      }
     },
   );
 }
@@ -329,6 +350,7 @@ function bindViewEvents() {
   );
   if (document.getElementById("resetOrders"))
     document.getElementById("resetOrders").onclick = resetOrders;
+  if (currentView === "suppliers") window.SupplierModule.bind();
   const search = document.getElementById("orderSearch");
   if (search)
     search.oninput = () => {
@@ -516,10 +538,19 @@ function removeInventoryItem(id) {
   openModal(
     "Remove inventory item?",
     `<div class="reset-warning"><div class="warning-badge">!</div><div><p>This will remove ${item.name} from inventory.</p><small>This action cannot be undone.</small></div></div>`,
-    () => {
-      data.inventory = data.inventory.filter((entry) => entry.id !== id);
-      save();
-      showToast(`${item.name} removed from inventory`);
+    async () => {
+      try {
+        const response = await fetch(`/api/inventory/${encodeURIComponent(id)}`, {
+          method: "DELETE",
+        });
+        const result = response.status === 204 ? null : await response.json();
+        if (!response.ok) throw new Error(result?.error || "Could not remove inventory item");
+        await loadServerData();
+        showToast(`${item.name} removed from inventory`);
+      } catch (error) {
+        showToast(error.message);
+        return false;
+      }
     },
     "Remove",
   );
@@ -559,19 +590,66 @@ function cycleStatus(id) {
   render();
   showToast(`Order #${order.tokenNo} marked ${order.status}`);
 }
-function changeStock(id, change) {
+async function changeStock(id, change) {
   const item = data.inventory.find((i) => i.id === id);
+  if (!item) return;
+  const transactionFields =
+    change === "reduce"
+      ? `<div class="form-field"><label>Reason</label><select name="type"><option value="STOCK_OUT">Used</option><option value="DAMAGE">Damaged</option><option value="EXPIRED">Expired</option></select></div>`
+      : "";
   openModal(
-    `${change === "add" ? "Add" : "Reduce"} ${item.name}`,
-    `<div class="form-field"><label>Quantity (${item.unit})</label><input name="quantity" type="number" min="1" required autofocus></div>`,
-    (form) => {
-      const quantity = Number(form.get("quantity"));
-      item.stock = Math.max(
-        0,
-        item.stock + (change === "add" ? quantity : -quantity),
-      );
-      save();
-      showToast(`${item.name} stock updated`);
+    `${change === "add" ? "Add" : change === "adjust" ? "Adjust" : "Reduce"} ${item.name}`,
+    `${transactionFields}<div class="form-field"><label>${change === "adjust" ? "Adjustment quantity (negative to reduce stock)" : `Quantity (${item.unit})`}</label><input name="quantity" type="number" ${change === "adjust" ? 'step="any"' : 'min="0.001" step="any"'} required ${change === "adjust" ? "" : "autofocus"}></div>`,
+    async (form) => {
+      const enteredQuantity = Number(form.get("quantity"));
+      if (!Number.isFinite(enteredQuantity) || enteredQuantity === 0 ||
+          (change !== "adjust" && enteredQuantity < 0)) {
+        showToast("Enter a valid non-zero quantity");
+        return false;
+      }
+      const quantity =
+        change === "adjust"
+          ? enteredQuantity
+          : change === "add"
+            ? enteredQuantity
+            : -enteredQuantity;
+      if (change === "reduce" && -quantity > Number(item.stock)) {
+        showToast("Stock cannot become negative");
+        return false;
+      }
+      if (change === "adjust" && Number(item.stock) + quantity < 0) {
+        showToast("Stock cannot become negative");
+        return false;
+      }
+      try {
+        const response = await fetch("/api/stock-transactions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            inventory_id: id,
+            transaction_type:
+              change === "add"
+                ? "STOCK_IN"
+                : change === "adjust"
+                  ? "ADJUSTMENT"
+                  : form.get("type"),
+            quantity_change: quantity,
+            notes:
+              change === "add"
+                ? "Manual stock addition"
+                : change === "adjust"
+                  ? "Manual stock adjustment"
+                  : String(form.get("type")),
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Could not update stock");
+        await loadServerData();
+        showToast(`${item.name} stock updated and recorded`);
+      } catch (error) {
+        showToast(error.message);
+        return false;
+      }
     },
   );
 }

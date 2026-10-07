@@ -27,7 +27,12 @@
       headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     });
     const result = response.status === 204 ? null : await response.json();
-    if (!response.ok) throw new Error(result?.error || "Could not complete the request");
+    if (!response.ok) {
+      const message = result?.detail
+        ? `${result.error || "Could not complete the request"}: ${result.detail}`
+        : result?.error || "Could not complete the request";
+      throw new Error(message);
+    }
     return result;
   }
   async function refresh() {
@@ -77,10 +82,10 @@
       .map((supplier) => {
         const history = purchases.filter((row) => row.supplier_id === supplier.id);
         const supplied = [...new Set(history.flatMap((row) => (row.items || []).map((line) => line.item_name || line.inventory?.name).filter(Boolean)))];
-        return `<tr><td><strong>${esc(supplier.name)}</strong>${supplier.is_active === false ? '<span class="subtext">Inactive</span>' : ""}</td><td>${esc(supplier.contact_person || "—")}</td><td>${esc(supplier.phone || "—")}</td><td>${esc(supplier.email || "—")}</td><td>${esc(supplier.address || "—")}</td><td>${esc(supplier.registration_number || "—")}</td><td>${esc(supplied.join(", ") || "—")}</td><td>${history.length}</td><td class="amount">${money(totalOf(history.filter((row) => row.purchase_status === "Received"), "total_amount"))}</td><td>${dateLabel(history[0]?.purchase_date)}</td><td><button class="small-action" data-supplier-action="view" data-id="${esc(supplier.id)}">View</button> <button class="small-action" data-supplier-action="edit" data-id="${esc(supplier.id)}">Edit</button> ${supplier.is_active === false ? '<span class="subtext">Inactive</span>' : `<button class="small-action danger" data-supplier-action="delete" data-id="${esc(supplier.id)}">Delete</button>`}</td></tr>`;
+        return `<tr><td><strong>${esc(supplier.name)}</strong>${supplier.is_active === false ? '<span class="subtext">Inactive</span>' : ""}</td><td>${esc(supplier.phone || "—")}</td><td>${esc(supplier.address || "—")}</td><td>${esc(supplied.join(", ") || "—")}</td><td>${history.length}</td><td class="amount">${money(totalOf(history.filter((row) => row.purchase_status === "Received"), "total_amount"))}</td><td>${dateLabel(history[0]?.purchase_date)}</td><td><button class="small-action" data-supplier-action="view" data-id="${esc(supplier.id)}">View</button> <button class="small-action" data-supplier-action="edit" data-id="${esc(supplier.id)}">Edit</button> ${supplier.is_active === false ? '<span class="subtext">Inactive</span>' : `<button class="small-action danger" data-supplier-action="delete" data-id="${esc(supplier.id)}">Delete</button>`}</td></tr>`;
       })
       .join("");
-    return `<section class="panel table-panel supplier-table"><table><thead><tr><th>Supplier</th><th>Contact person</th><th>Phone</th><th>Email</th><th>Address</th><th>Business registration</th><th>Items supplied</th><th>Purchases</th><th>Total spent</th><th>Last purchase</th><th>Actions</th></tr></thead><tbody>${rows || '<tr><td colspan="11" class="empty-state">No suppliers yet. Add your first supplier to get started.</td></tr>'}</tbody></table></section>`;
+    return `<section class="panel table-panel supplier-table"><table><thead><tr><th>Supplier</th><th>Phone</th><th>Address</th><th>Items supplied</th><th>Purchases</th><th>Total spent</th><th>Last purchase</th><th>Actions</th></tr></thead><tbody>${rows || '<tr><td colspan="8" class="empty-state">No suppliers yet. Add your first supplier to get started.</td></tr>'}</tbody></table></section>`;
   }
   function supplierPage() {
     const selected = suppliers.find((row) => row.id === supplierId);
@@ -92,7 +97,7 @@
     const history = purchases.filter((row) => row.supplier_id === selected.id);
     const lines = [...new Set(history.flatMap((row) => (row.items || []).map((item) => item.item_name || item.inventory?.name).filter(Boolean)))];
     const payable = totalOf(history.filter((row) => row.purchase_status === "Received"), "balance_amount");
-    return `<div class="section-head"><div><button class="small-action" data-supplier-action="back">← Suppliers</button><span class="eyebrow">SUPPLIER PROFILE</span><h2>${esc(selected.name)}</h2></div><div class="row-actions"><button class="button ghost" data-supplier-action="edit" data-id="${esc(selected.id)}">Edit supplier</button>${selected.is_active !== false ? `<button class="button primary" data-supplier-action="new-purchase" data-id="${esc(selected.id)}">＋ New purchase</button>` : ""}</div></div><div class="stats-grid"><div class="stat-card"><span class="stat-label">Total purchases</span><strong>${history.length}</strong></div><div class="stat-card"><span class="stat-label">Total spent</span><strong>${money(totalOf(history.filter((row) => row.purchase_status === "Received"), "total_amount"))}</strong></div><div class="stat-card"><span class="stat-label">Pending payable</span><strong>${money(payable)}</strong></div><div class="stat-card"><span class="stat-label">Latest purchase</span><strong class="supplier-date">${dateLabel(history[0]?.purchase_date)}</strong></div></div><section class="panel supplier-profile"><div><span class="eyebrow">CONTACT DETAILS</span><p><strong>Contact person</strong><br>${esc(selected.contact_person || "—")}</p><p><strong>Phone</strong><br>${esc(selected.phone || "—")}</p><p><strong>Email</strong><br>${esc(selected.email || "—")}</p><p><strong>Address</strong><br>${esc(selected.address || "—")}</p><p><strong>Business registration</strong><br>${esc(selected.registration_number || "—")}</p><p><strong>Notes</strong><br>${esc(selected.notes || "—")}</p></div><div><span class="eyebrow">ITEMS SUPPLIED</span><p>${esc(lines.join(", ") || "No items recorded yet.")}</p></div></section><div class="panel-head supplier-history-head"><h3>Purchase history</h3></div>${purchaseTable(history)}`;
+    return `<div class="section-head"><div><button class="small-action" data-supplier-action="back">← Suppliers</button><span class="eyebrow">SUPPLIER PROFILE</span><h2>${esc(selected.name)}</h2></div><div class="row-actions"><button class="button ghost" data-supplier-action="edit" data-id="${esc(selected.id)}">Edit supplier</button>${selected.is_active !== false ? `<button class="button primary" data-supplier-action="new-purchase" data-id="${esc(selected.id)}">＋ New purchase</button>` : ""}</div></div><div class="stats-grid"><div class="stat-card"><span class="stat-label">Total purchases</span><strong>${history.length}</strong></div><div class="stat-card"><span class="stat-label">Total spent</span><strong>${money(totalOf(history.filter((row) => row.purchase_status === "Received"), "total_amount"))}</strong></div><div class="stat-card"><span class="stat-label">Pending payable</span><strong>${money(payable)}</strong></div><div class="stat-card"><span class="stat-label">Latest purchase</span><strong class="supplier-date">${dateLabel(history[0]?.purchase_date)}</strong></div></div><section class="panel supplier-profile"><div><span class="eyebrow">SUPPLIER DETAILS</span><p><strong>Phone</strong><br>${esc(selected.phone || "—")}</p><p><strong>Address</strong><br>${esc(selected.address || "—")}</p><p><strong>Notes</strong><br>${esc(selected.notes || "—")}</p></div><div><span class="eyebrow">ITEMS SUPPLIED</span><p>${esc(lines.join(", ") || "No items recorded yet.")}</p></div></section><div class="panel-head supplier-history-head"><h3>Purchase history</h3></div>${purchaseTable(history)}`;
   }
   function historyPage() {
     const rows = purchases.filter((row) =>
@@ -118,7 +123,8 @@
     purchases.filter((row) => row.purchase_status === "Received").forEach((row) => {
       dateTotals[row.purchase_date] = (dateTotals[row.purchase_date] || 0) + Number(row.total_amount);
     });
-    return `<div class="section-head"><div><span class="eyebrow">SUPPLIER INSIGHTS</span><h2>Reports</h2></div><button class="button primary" data-supplier-action="new-purchase">＋ New purchase</button></div>${summaryCards()}<div class="supplier-report-grid"><section class="panel"><h3>Supplier-wise purchases</h3><table><thead><tr><th>Supplier</th><th>Total received</th></tr></thead><tbody>${Object.entries(bySupplier).sort((a, b) => b[1] - a[1]).map(([id, amount]) => `<tr><td>${esc(supplierName(id))}</td><td class="amount">${money(amount)}</td></tr>`).join("") || '<tr><td colspan="2" class="muted">No received purchases yet.</td></tr>'}</tbody></table></section><section class="panel"><h3>Most purchased items</h3><table><thead><tr><th>Inventory item</th><th>Quantity purchased</th></tr></thead><tbody>${Object.entries(frequency).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, quantity]) => `<tr><td>${esc(name)}</td><td class="amount">${quantity}</td></tr>`).join("") || '<tr><td colspan="2" class="muted">No items recorded yet.</td></tr>'}</tbody></table></section><section class="panel"><h3>Date-wise purchase expenses</h3><table><thead><tr><th>Date</th><th>Total received</th></tr></thead><tbody>${Object.entries(dateTotals).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 15).map(([date, amount]) => `<tr><td>${dateLabel(date)}</td><td class="amount">${money(amount)}</td></tr>`).join("") || '<tr><td colspan="2" class="muted">No received purchases yet.</td></tr>'}</tbody></table></section><section class="panel"><h3>Recent purchases</h3>${purchaseRows(purchases.slice(0, 5))}</section></div>`;
+    const recentPurchases = purchases.slice(0, 5);
+    return `<div class="section-head"><div><span class="eyebrow">SUPPLIER INSIGHTS</span><h2>Reports</h2></div><button class="button primary" data-supplier-action="new-purchase">＋ New purchase</button></div>${summaryCards()}<div class="supplier-report-grid"><section class="panel"><h3>Supplier-wise purchases</h3><table><thead><tr><th>Supplier</th><th>Total received</th></tr></thead><tbody>${Object.entries(bySupplier).sort((a, b) => b[1] - a[1]).map(([id, amount]) => `<tr><td>${esc(supplierName(id))}</td><td class="amount">${money(amount)}</td></tr>`).join("") || '<tr><td colspan="2" class="muted">No received purchases yet.</td></tr>'}</tbody></table></section><section class="panel"><h3>Most purchased items</h3><table><thead><tr><th>Inventory item</th><th>Quantity purchased</th></tr></thead><tbody>${Object.entries(frequency).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, quantity]) => `<tr><td>${esc(name)}</td><td class="amount">${quantity}</td></tr>`).join("") || '<tr><td colspan="2" class="muted">No items recorded yet.</td></tr>'}</tbody></table></section><section class="panel"><h3>Date-wise purchase expenses</h3><table><thead><tr><th>Date</th><th>Total received</th></tr></thead><tbody>${Object.entries(dateTotals).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 15).map(([date, amount]) => `<tr><td>${dateLabel(date)}</td><td class="amount">${money(amount)}</td></tr>`).join("") || '<tr><td colspan="2" class="muted">No received purchases yet.</td></tr>'}</tbody></table></section><section class="panel recent-purchases-panel"><h3>Recent purchases</h3><div class="recent-purchase-list">${recentPurchases.map((purchase) => `<article class="recent-purchase-row"><div class="recent-purchase-main"><strong>${esc(purchase.purchase_number)}</strong><span>${esc(purchase.supplier?.name || supplierName(purchase.supplier_id))}</span><small>${dateLabel(purchase.purchase_date)}</small></div><div class="recent-purchase-meta"><strong>${money(purchase.total_amount)}</strong><div>${status(purchase.payment_status)} ${status(purchase.purchase_status)}</div></div><button type="button" class="small-action recent-purchase-view" data-supplier-action="purchase" data-id="${esc(purchase.id)}">View</button></article>`).join("") || '<p class="muted recent-purchases-empty">No purchases yet.</p>'}</div></section></div>`;
   }
   function purchasePage() {
     const purchase = purchases.find((row) => row.id === purchaseId);
@@ -128,7 +134,8 @@
       return historyPage();
     }
     const canReceive = ["Draft", "Ordered"].includes(purchase.purchase_status);
-    return `<div class="section-head"><div><button class="small-action" data-supplier-action="back">← Purchase history</button><span class="eyebrow">PURCHASE DETAILS</span><h2>${esc(purchase.purchase_number)}</h2><p class="muted">${esc(purchase.supplier?.name || supplierName(purchase.supplier_id))} · ${dateLabel(purchase.purchase_date)}</p></div><div class="row-actions">${canReceive ? `<button class="button ghost" data-supplier-action="edit-purchase" data-id="${esc(purchase.id)}">Edit purchase</button><button class="button secondary" data-supplier-action="receive" data-id="${esc(purchase.id)}">Mark received</button>` : ""}${canReceive ? `<button class="button danger" data-supplier-action="cancel-purchase" data-id="${esc(purchase.id)}">Cancel purchase</button>` : ""}</div></div><div class="stats-grid"><div class="stat-card"><span class="stat-label">Total amount</span><strong>${money(purchase.total_amount)}</strong></div><div class="stat-card"><span class="stat-label">Amount paid</span><strong>${money(purchase.amount_paid)}</strong></div><div class="stat-card"><span class="stat-label">Remaining balance</span><strong>${money(purchase.balance_amount)}</strong></div><div class="stat-card"><span class="stat-label">Payment / purchase status</span><strong class="supplier-status">${esc(purchase.payment_status)} / ${esc(purchase.purchase_status)}</strong></div></div><section class="panel supplier-profile"><div><p><strong>Supplier:</strong> ${esc(purchase.supplier?.name || supplierName(purchase.supplier_id))}</p><p><strong>Invoice:</strong> ${esc(purchase.invoice_number || "—")}</p><p><strong>Notes:</strong> ${esc(purchase.notes || "—")}</p></div><div><span class="eyebrow">ITEMS PURCHASED</span></div></section><section class="panel table-panel supplier-table"><table><thead><tr><th>Inventory item</th><th>Quantity</th><th>Unit</th><th>Unit cost</th><th>Line total</th></tr></thead><tbody>${(purchase.items || []).map((item) => `<tr><td><strong>${esc(item.item_name || item.inventory?.name || "Inventory item")}</strong></td><td>${esc(item.quantity)}</td><td>${esc(item.unit)}</td><td>${money(item.unit_cost)}</td><td class="amount">${money(item.total_amount)}</td></tr>`).join("") || '<tr><td colspan="5" class="empty-state">No items on this purchase.</td></tr>'}</tbody></table></section>`;
+    const canUpdatePayment = purchase.purchase_status !== "Cancelled";
+    return `<div class="section-head"><div><button class="small-action" data-supplier-action="back">← Purchase history</button><span class="eyebrow">PURCHASE DETAILS</span><h2>${esc(purchase.purchase_number)}</h2><p class="muted">${esc(purchase.supplier?.name || supplierName(purchase.supplier_id))} · ${dateLabel(purchase.purchase_date)}</p></div><div class="row-actions">${canReceive ? `<button class="button ghost" data-supplier-action="edit-purchase" data-id="${esc(purchase.id)}">Edit purchase</button>` : ""}${canReceive ? `<button class="button secondary" data-supplier-action="receive" data-id="${esc(purchase.id)}">Mark received</button>` : ""}${canReceive ? `<button class="button danger" data-supplier-action="cancel-purchase" data-id="${esc(purchase.id)}">Cancel purchase</button>` : ""}</div></div><div class="stats-grid"><div class="stat-card"><span class="stat-label">Total amount</span><strong>${money(purchase.total_amount)}</strong></div><div class="stat-card"><span class="stat-label">Amount paid</span><strong>${money(purchase.amount_paid)}</strong></div><div class="stat-card"><span class="stat-label">Remaining balance</span><strong>${money(purchase.balance_amount)}</strong></div><div class="stat-card"><span class="stat-label">Payment / purchase status</span><strong class="supplier-status">${esc(purchase.payment_status)} / ${esc(purchase.purchase_status)}</strong></div></div><section class="panel purchase-status-controls"><div><span class="eyebrow">PAYMENT</span><strong>${status(purchase.payment_status)}</strong></div><button class="button ghost" data-supplier-action="change-payment" data-id="${esc(purchase.id)}" ${canUpdatePayment ? "" : "disabled"}>Update payment</button><div><span class="eyebrow">PURCHASE STATUS</span><strong>${status(purchase.purchase_status)}</strong></div>${canReceive ? `<button class="button ghost" data-supplier-action="change-purchase-status" data-id="${esc(purchase.id)}">Change status</button>` : `<span class="muted purchase-status-note">${purchase.purchase_status === "Received" ? "Received purchases are final." : "Cancelled purchases are final."}</span>`}</section><section class="panel supplier-profile"><div><p><strong>Supplier:</strong> ${esc(purchase.supplier?.name || supplierName(purchase.supplier_id))}</p><p><strong>Invoice:</strong> ${esc(purchase.invoice_number || "—")}</p><p><strong>Notes:</strong> ${esc(purchase.notes || "—")}</p></div><div><span class="eyebrow">ITEMS PURCHASED</span></div></section><section class="panel table-panel supplier-table"><table><thead><tr><th>Inventory item</th><th>Quantity</th><th>Unit</th><th>Unit cost</th><th>Line total</th></tr></thead><tbody>${(purchase.items || []).map((item) => `<tr><td><strong>${esc(item.item_name || item.inventory?.name || "Inventory item")}</strong></td><td>${esc(item.quantity)}</td><td>${esc(item.unit)}</td><td>${money(item.unit_cost)}</td><td class="amount">${money(item.total_amount)}</td></tr>`).join("") || '<tr><td colspan="5" class="empty-state">No items on this purchase.</td></tr>'}</tbody></table></section>`;
   }
   function render(inventoryItems = []) {
     inventory = inventoryItems;
@@ -144,8 +151,8 @@
   function supplierForm(existing) {
     const field = (key, label, type = "text", required = false) =>
       `<div class="form-field"><label>${label}${required ? " *" : ""}</label><input name="${key}" type="${type}" ${required ? "required" : ""} value="${esc(existing?.[key] || "")}"></div>`;
-    window.openModal(existing ? "Edit supplier" : "Add supplier", `<div class="form-grid">${field("name", "Supplier name", "text", true)}${field("contact_person", "Contact person")}${field("phone", "Phone number", "tel")}${field("email", "Email", "email")}<div class="form-field field-full"><label>Address</label><input name="address" value="${esc(existing?.address || "")}"></div>${field("registration_number", "Business registration number")}<div class="form-field field-full"><label>Notes</label><textarea class="form-input" name="notes" rows="3">${esc(existing?.notes || "")}</textarea></div></div>`, async (form) => {
-      const body = Object.fromEntries(["name", "contact_person", "phone", "email", "address", "registration_number", "notes"].map((key) => [key, String(form.get(key) || "").trim()]));
+    window.openModal(existing ? "Edit supplier" : "Add supplier", `<div class="form-grid">${field("name", "Supplier name", "text", true)}${field("phone", "Phone number", "tel")}<div class="form-field field-full"><label>Address</label><input name="address" value="${esc(existing?.address || "")}"></div><div class="form-field field-full"><label>Notes</label><textarea class="form-input" name="notes" rows="3">${esc(existing?.notes || "")}</textarea></div></div>`, async (form) => {
+      const body = Object.fromEntries(["name", "phone", "address", "notes"].map((key) => [key, String(form.get(key) || "").trim()]));
       if (!body.name) {
         toast("Supplier name is required");
         return false;
@@ -160,7 +167,7 @@
       }
     });
   }
-  const itemRow = () => `<div class="purchase-line"><div class="form-field"><label>Inventory item</label><select class="purchase-item-select"><option value="">Select an item</option>${inventory.map((item) => `<option value="${esc(item.id)}" data-name="${esc(item.name)}" data-unit="${esc(item.unit)}">${esc(item.name)} · ${esc(item.stock)} ${esc(item.unit)}</option>`).join("")}<option value="__new">＋ Add a new item</option></select><input class="purchase-new-item hidden" placeholder="New inventory item name"></div><div class="purchase-line-fields"><div class="form-field"><label>Quantity</label><input class="purchase-quantity" type="number" min="0.001" step="any" value="1" required></div><div class="form-field"><label>Unit</label><select class="purchase-unit">${units.map((unit) => `<option>${unit}</option>`).join("")}</select></div><div class="form-field"><label>Unit cost</label><input class="purchase-cost" type="number" min="0" step="0.01" value="0" required></div><strong class="purchase-line-total">${money(0)}</strong><button class="remove-item" type="button" data-remove-line aria-label="Remove item">×</button></div></div>`;
+  const itemRow = () => `<div class="purchase-line"><div class="form-field"><label>Inventory item</label><select class="purchase-item-select"><option value="">Select an item</option>${inventory.map((item) => `<option value="${esc(item.id)}" data-name="${esc(item.name)}" data-unit="${esc(item.unit)}">${esc(item.name)} · ${esc(item.stock)} ${esc(item.unit)}</option>`).join("")}<option value="__new">＋ Add a new item</option></select><input class="purchase-new-item hidden" placeholder="New inventory item name"></div><div class="purchase-line-fields"><div class="form-field"><label>Quantity</label><input class="purchase-quantity" type="number" min="0.001" step="any" value="1" required></div><div class="form-field"><label>Unit</label><select class="purchase-unit">${units.map((unit) => `<option>${unit}</option>`).join("")}</select></div><div class="form-field"><label>Unit cost</label><input class="purchase-cost" type="number" min="0" step="0.01" value="0" required></div><strong class="purchase-line-total">${money(0)}</strong><button class="remove-item" type="button" data-remove-line aria-label="Remove item">×</button><div class="purchase-remove-confirm hidden"><span>Remove this item?</span><button type="button" class="small-action danger" data-confirm-remove>Remove</button><button type="button" class="small-action" data-cancel-remove>Keep</button></div></div></div>`;
   function updatePurchaseSummary() {
     const root = document.getElementById("activeModal");
     if (!root) return;
@@ -202,9 +209,18 @@
         }
         updatePurchaseSummary();
       });
-      line.querySelector("[data-remove-line]").onclick = () => {
+      const removeButton = line.querySelector("[data-remove-line]");
+      const removeConfirmation = line.querySelector(".purchase-remove-confirm");
+      removeButton.onclick = () => {
         if (list.querySelectorAll(".purchase-line").length < 2) return toast("A purchase must include at least one item");
-        if (!window.confirm("Remove this item from the unsaved purchase?")) return;
+        removeButton.classList.add("hidden");
+        removeConfirmation.classList.remove("hidden");
+      };
+      line.querySelector("[data-cancel-remove]").onclick = () => {
+        removeConfirmation.classList.add("hidden");
+        removeButton.classList.remove("hidden");
+      };
+      line.querySelector("[data-confirm-remove]").onclick = () => {
         line.remove();
         updatePurchaseSummary();
       };
@@ -220,7 +236,7 @@
   function purchaseForm(preselectedSupplier = "") {
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const form = `<div class="form-grid"><div class="form-field"><label>Supplier *</label><select name="supplier_id" required><option value="">Select supplier</option>${suppliers.filter((row) => row.is_active !== false).map((row) => `<option value="${esc(row.id)}" ${preselectedSupplier === row.id ? "selected" : ""}>${esc(row.name)}</option>`).join("")}</select></div><div class="form-field"><label>Purchase date</label><input name="purchase_date" type="date" required value="${today}"></div><div class="form-field"><label>Invoice / bill number</label><input name="invoice_number"></div><div class="form-field"><label>Purchase status</label><select name="purchase_status"><option>Draft</option><option>Ordered</option></select></div></div><div class="supplier-purchase-items-head"><h3>Purchase items</h3><button type="button" class="button ghost" id="add-purchase-line">＋ Add item</button></div><div id="purchase-lines">${itemRow()}</div><div class="form-grid"><div class="form-field"><label>Amount paid</label><input name="amount_paid" type="number" min="0" step="0.01" value="0"></div><div class="form-field"><label>Notes</label><input name="notes"></div></div><div class="purchase-summary"><div><span>Total purchase amount</span><strong id="purchase-total">${money(0)}</strong></div><div><span>Payment status</span><strong id="purchase-payment-status">Unpaid</strong></div><div><span>Remaining balance</span><strong id="purchase-balance">${money(0)}</strong></div><p class="muted">Inventory stock changes only when the purchase is marked received.</p></div>`;
+    const form = `<div class="form-grid"><div class="form-field"><label>Supplier *</label><select name="supplier_id" required><option value="">Select supplier</option>${suppliers.filter((row) => row.is_active !== false).map((row) => `<option value="${esc(row.id)}" ${preselectedSupplier === row.id ? "selected" : ""}>${esc(row.name)}</option>`).join("")}</select></div><div class="form-field"><label>Purchase date</label><input name="purchase_date" type="date" required value="${today}"></div><div class="form-field"><label>Invoice / bill number</label><input name="invoice_number"></div><div class="form-field"><label>Purchase status</label><select name="purchase_status"><option>Draft</option><option>Ordered</option></select></div></div><div class="supplier-purchase-items-head"><div><h3>Purchase items</h3><p class="muted">Choose inventory items and enter the quantity and cost.</p></div><button type="button" class="button ghost" id="add-purchase-line">＋ Add item</button></div><div id="purchase-lines">${itemRow()}</div><div class="form-grid purchase-payment-fields"><div class="form-field"><label>Amount paid</label><input name="amount_paid" type="number" min="0" step="0.01" value="0"></div><div class="form-field"><label>Notes</label><input name="notes"></div></div><div class="purchase-summary"><div><span>Total purchase amount</span><strong id="purchase-total">${money(0)}</strong></div><div><span>Payment status</span><strong id="purchase-payment-status">Unpaid</strong></div><div><span>Remaining balance</span><strong id="purchase-balance">${money(0)}</strong></div><p class="muted">Inventory stock changes only when the purchase is marked received.</p></div>`;
     window.openModal("New supply purchase", form, async (formData) => {
       const root = document.getElementById("activeModal");
       const lines = [...root.querySelectorAll(".purchase-line")].map((line) => {
@@ -337,6 +353,101 @@
           supplierId = "";
           window.render();
           break;
+        case "change-payment": {
+          const purchase = purchases.find((row) => row.id === id);
+          if (!purchase || purchase.purchase_status === "Cancelled") return;
+          const total = Number(purchase.total_amount);
+          window.openModal(
+            "Update supplier payment",
+            `<p class="muted">Choose a payment status. The amount and remaining balance will update automatically.</p><div class="payment-status-buttons"><button type="button" class="button ghost" data-payment-preset="unpaid">Mark unpaid</button><button type="button" class="button ghost" data-payment-preset="partial">Partially paid</button><button type="button" class="button ghost" data-payment-preset="paid">Mark paid</button></div><div class="form-field"><label>Amount paid</label><input name="amount_paid" type="number" min="0" max="${esc(total)}" step="0.01" value="${esc(purchase.amount_paid)}" required></div><div class="purchase-summary payment-preview"><div><span>Payment status</span><strong id="payment-preview-status">${esc(purchase.payment_status)}</strong></div><div><span>Remaining balance</span><strong id="payment-preview-balance">${money(purchase.balance_amount)}</strong></div></div>`,
+            async (form) => {
+              const paid = Number(form.get("amount_paid"));
+              if (!Number.isFinite(paid) || paid < 0 || paid > total) {
+                toast("Amount paid must be between zero and the purchase total");
+                return false;
+              }
+              try {
+                await request(`/api/purchases/${encodeURIComponent(id)}/payment`, {
+                  method: "PATCH",
+                  body: JSON.stringify({ amount_paid: Math.round(paid * 100) / 100 }),
+                });
+                await refresh();
+                purchaseId = id;
+                toast("Supplier payment updated");
+              } catch (error) {
+                toast(error.message);
+                return false;
+              }
+            },
+          );
+          const modal = document.getElementById("activeModal");
+          const amountInput = modal.querySelector('[name="amount_paid"]');
+          const statusPreview = modal.querySelector("#payment-preview-status");
+          const balancePreview = modal.querySelector("#payment-preview-balance");
+          const updatePreview = () => {
+            const paid = Math.max(0, Math.min(Number(amountInput.value) || 0, total));
+            const balance = Math.max(0, total - paid);
+            statusPreview.textContent = balance <= 0 ? "Paid" : paid <= 0 ? "Unpaid" : "Partially Paid";
+            balancePreview.textContent = money(balance);
+          };
+          amountInput.addEventListener("input", updatePreview);
+          modal.querySelectorAll("[data-payment-preset]").forEach((preset) => {
+            preset.onclick = () => {
+              if (preset.dataset.paymentPreset === "paid") amountInput.value = total.toFixed(2);
+              if (preset.dataset.paymentPreset === "unpaid") amountInput.value = "0";
+              if (preset.dataset.paymentPreset === "partial") {
+                const current = Number(amountInput.value);
+                const suggested = current > 0 && current < total ? current : total / 2;
+                amountInput.value = total > 0 ? Math.max(0.01, Math.min(suggested, total - 0.01)).toFixed(2) : "0";
+              }
+              updatePreview();
+            };
+          });
+          break;
+        }
+        case "change-purchase-status": {
+          const purchase = purchases.find((row) => row.id === id);
+          if (!purchase || !["Draft", "Ordered"].includes(purchase.purchase_status)) return;
+          window.openModal(
+            "Change purchase status",
+            `<div class="form-field"><label>Purchase status</label><select name="purchase_status"><option ${purchase.purchase_status === "Draft" ? "selected" : ""}>Draft</option><option ${purchase.purchase_status === "Ordered" ? "selected" : ""}>Ordered</option><option>Received</option><option>Cancelled</option></select></div><p class="muted">Marking as received adds items to inventory and records stock movements. Cancelled purchases cannot be reopened.</p>`,
+            async (form) => {
+              const nextStatus = String(form.get("purchase_status"));
+              if (nextStatus === "Received") {
+                confirmAction("Receive this purchase?", "This adds the listed quantities to inventory and records each stock movement.", "Mark received", async () => {
+                  await request(`/api/purchases/${encodeURIComponent(id)}/receive`, { method: "POST", body: "{}" });
+                  await refresh();
+                  purchaseId = id;
+                  toast("Purchase received and inventory updated");
+                });
+                return false;
+              }
+              if (nextStatus === "Cancelled") {
+                confirmAction("Cancel this purchase?", "The purchase will be marked cancelled. No inventory stock will be changed.", "Cancel purchase", async () => {
+                  await request(`/api/purchases/${encodeURIComponent(id)}`, { method: "DELETE" });
+                  await refresh();
+                  purchaseId = id;
+                  toast("Purchase cancelled");
+                });
+                return false;
+              }
+              try {
+                await request(`/api/purchases/${encodeURIComponent(id)}`, {
+                  method: "PUT",
+                  body: JSON.stringify({ purchase_status: nextStatus }),
+                });
+                await refresh();
+                purchaseId = id;
+                toast("Purchase status updated");
+              } catch (error) {
+                toast(error.message);
+                return false;
+              }
+            },
+            "Update status",
+          );
+          break;
+        }
         case "edit-purchase": {
           const purchase = purchases.find((row) => row.id === id);
           if (!purchase) return;

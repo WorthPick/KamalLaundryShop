@@ -92,13 +92,11 @@ create table if not exists public.suppliers (
   phone text,
   email text,
   address text,
-  registration_number text,
   notes text,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-alter table public.suppliers add column if not exists registration_number text;
 
 create table if not exists public.purchases (
   id uuid primary key default gen_random_uuid(),

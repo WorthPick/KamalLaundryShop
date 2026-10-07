@@ -43,10 +43,28 @@ app.use(
 );
 app.use(express.static(__dirname));
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   if (!req.session.user)
     return res.status(401).json({ error: "Authentication required" });
-  next();
+  if (req.session.appUserReady) return next();
+  try {
+    const { error } = await admin.from("users").upsert(
+      {
+        id: req.session.user.id,
+        username: req.session.user.username || req.session.user.id,
+      },
+      { onConflict: "id", ignoreDuplicates: true },
+    );
+    if (error) throw error;
+    req.session.appUserReady = true;
+    next();
+  } catch (error) {
+    console.error("Could not prepare authenticated user profile", error);
+    res.status(500).json({
+      error: "Could not prepare authenticated user profile",
+      detail: error.message,
+    });
+  }
 }
 async function state() {
   const [customers, services, inventory, orders, items] = await Promise.all([
@@ -202,7 +220,7 @@ async function attachPurchaseDetails(rows) {
   const supplierIds = [...new Set(rows.map((row) => row.supplier_id))];
   const [itemsResult, suppliersResult] = await Promise.all([
     admin.from("purchase_items").select("*").in("purchase_id", purchaseIds),
-    admin.from("suppliers").select("id,name,contact_person,phone,email,address,registration_number").in("id", supplierIds),
+    admin.from("suppliers").select("id,name,contact_person,phone,email,address").in("id", supplierIds),
   ]);
   if (itemsResult.error) throw itemsResult.error;
   if (suppliersResult.error) throw suppliersResult.error;
@@ -287,17 +305,14 @@ app.get("/api/suppliers", requireAuth, async (req, res) => {
 });
 
 app.post("/api/suppliers", requireAuth, async (req, res) => {
-  const { name, contact_person, phone, email, address, registration_number, notes } = req.body || {};
+  const { name, phone, address, notes } = req.body || {};
   if (!String(name || "").trim())
     return res.status(400).json({ error: "Supplier name is required" });
   try {
     const { data, error } = await admin.from("suppliers").insert({
       name: String(name).trim(),
-      contact_person: String(contact_person || "").trim() || null,
       phone: String(phone || "").trim() || null,
-      email: String(email || "").trim() || null,
       address: String(address || "").trim() || null,
-      registration_number: String(registration_number || "").trim() || null,
       notes: String(notes || "").trim() || null,
     }).select("*").single();
     if (error) throw error;
@@ -333,17 +348,14 @@ app.get("/api/suppliers/:id", requireAuth, async (req, res) => {
 });
 
 app.put("/api/suppliers/:id", requireAuth, async (req, res) => {
-  const { name, contact_person, phone, email, address, registration_number, notes } = req.body || {};
+  const { name, phone, address, notes } = req.body || {};
   if (!String(name || "").trim())
     return res.status(400).json({ error: "Supplier name is required" });
   try {
     const { data, error } = await admin.from("suppliers").update({
       name: String(name).trim(),
-      contact_person: String(contact_person || "").trim() || null,
       phone: String(phone || "").trim() || null,
-      email: String(email || "").trim() || null,
       address: String(address || "").trim() || null,
-      registration_number: String(registration_number || "").trim() || null,
       notes: String(notes || "").trim() || null,
       updated_at: new Date().toISOString(),
     }).eq("id", req.params.id).select("*").single();
@@ -484,6 +496,43 @@ app.put("/api/purchases", requireAuth, (req, res) => {
   return updatePurchase(req, res);
 });
 app.put("/api/purchases/:id", requireAuth, updatePurchase);
+
+app.patch("/api/purchases/:id/payment", requireAuth, async (req, res) => {
+  const amount = Number(req.body?.amount_paid);
+  if (!Number.isFinite(amount) || amount < 0)
+    return res.status(400).json({ error: "Amount paid must be a non-negative number" });
+  try {
+    const { data: existing, error: readError } = await admin
+      .from("purchases")
+      .select("id,total_amount,purchase_status")
+      .eq("id", req.params.id)
+      .single();
+    if (readError) throw readError;
+    if (existing.purchase_status === "Cancelled")
+      return res.status(409).json({ error: "Cancelled purchases cannot have payment changes" });
+    const paid = Math.round(amount * 100) / 100;
+    const total = Number(existing.total_amount);
+    if (paid > total)
+      return res.status(400).json({ error: "Amount paid cannot exceed the purchase total" });
+    const balance = Math.round((total - paid) * 100) / 100;
+    const paymentStatus = balance <= 0 ? "Paid" : paid <= 0 ? "Unpaid" : "Partially Paid";
+    const { data, error } = await admin
+      .from("purchases")
+      .update({
+        amount_paid: paid,
+        balance_amount: balance,
+        payment_status: paymentStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", req.params.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    apiError(res, error, "Could not update supplier payment");
+  }
+});
 
 app.delete("/api/purchases/:id", requireAuth, async (req, res) => {
   try {

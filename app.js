@@ -70,11 +70,12 @@ async function save() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error("Save failed");
-    data = await response.json();
+    const result = await response.json();
+    if (!response.ok) throw new Error(result?.error || "Could not save shop data");
+    data = result;
     return true;
   } catch (error) {
-    showToast("Could not save to the shop database");
+    showToast(error.message || "Could not save to the shop database");
     return false;
   }
 }
@@ -225,7 +226,7 @@ function inventoryView() {
     .map((i) => {
       const low = i.stock <= i.minStock;
       const percent = i.minStock > 0 ? Math.min((i.stock / i.minStock) * 100, 100) : 100;
-      return `<div class="inventory-card ${low ? "low" : ""}"><h3>${i.name}</h3><span class="muted">Minimum level: ${i.minStock} ${i.unit}</span><div class="stock-count">${i.stock} <span>${i.unit}</span></div>${low ? '<span class="low-warning">● LOW STOCK · RESTOCK SOON</span>' : '<span class="low-warning" style="color:var(--teal)">● STOCK LEVEL OK</span>'}<div class="progress"><span style="width:${percent}%"></span></div><div class="row-actions"><button class="button ghost" data-stock="${i.id}" data-change="reduce">− Reduce</button><button class="button secondary" data-stock="${i.id}" data-change="add">＋ Add stock</button><button class="button ghost" data-stock="${i.id}" data-change="adjust">± Adjust</button><button class="button danger" data-delete-inventory="${i.id}">Remove</button></div></div>`;
+      return `<div class="inventory-card ${low ? "low" : ""}"><h3>${i.name}</h3><span class="muted">Minimum level: ${i.minStock} ${i.unit}</span><div class="stock-count">${i.stock} <span>${i.unit}</span></div>${low ? '<span class="low-warning">● LOW STOCK · RESTOCK SOON</span>' : '<span class="low-warning" style="color:var(--teal)">● STOCK LEVEL OK</span>'}<div class="progress"><span style="width:${percent}%"></span></div><div class="row-actions"><button class="button ghost" data-stock="${i.id}" data-change="reduce">− Reduce</button><button class="button secondary" data-stock="${i.id}" data-change="add">＋ Add stock</button><button class="button danger" data-delete-inventory="${i.id}">Remove</button></div></div>`;
     })
     .join("")}</div>`;
 }
@@ -234,25 +235,53 @@ function openModal(title, body, onSave, saveLabel = "Save") {
   const modalClass = saveLabel !== "Save" ? "modal danger" : "modal";
   root.innerHTML = `<div class="modal-backdrop"><form class="${modalClass}" id="activeModal"><h2>${title}</h2>${body}<div class="modal-actions"><button type="button" class="button ghost" id="closeModal">Cancel</button><button class="button ${saveLabel !== "Save" ? "danger" : "primary"}" type="submit">${saveLabel}</button></div></form></div>`;
   root.querySelector("#closeModal").onclick = () => (root.innerHTML = "");
-  root.querySelector("#activeModal").onsubmit = async (e) => {
+  const form = root.querySelector("#activeModal");
+  form.onsubmit = async (e) => {
     e.preventDefault();
-    const result = await onSave(new FormData(e.target));
-    if (result === false) return;
-    root.innerHTML = "";
-    render();
+    if (form.dataset.submitting === "true") return;
+    form.dataset.submitting = "true";
+    const submitButton = form.querySelector('[type="submit"]');
+    submitButton.disabled = true;
+    try {
+      const result = await onSave(new FormData(form));
+      if (result === false) return;
+      root.innerHTML = "";
+      render();
+    } catch (error) {
+      showToast(error.message || "Could not complete the action");
+    } finally {
+      if (form.isConnected) {
+        form.dataset.submitting = "false";
+        submitButton.disabled = false;
+      }
+    }
   };
 }
 function customerModal() {
   openModal(
     "Add a customer",
     '<div class="form-field"><label>Name</label><input name="name" required placeholder="e.g. Nisha Karki"></div><div class="form-field"><label>Phone number</label><input name="phone" required pattern="[0-9]{7,15}" placeholder="98XXXXXXXX"></div>',
-    (form) => {
-      data.customers.push({
+    async (form) => {
+      const name = String(form.get("name") || "").trim();
+      if (data.customers.some((customer) =>
+        customer.name.trim().toLocaleLowerCase("en-IN") === name.toLocaleLowerCase("en-IN"),
+      )) {
+        showToast("Customer already exists");
+        return false;
+      }
+      const previousData = structuredClone(data);
+      const customer = {
         id: uid("c"),
-        name: form.get("name"),
+        name,
         phone: form.get("phone"),
+      };
+      data.customers.push({
+        ...customer,
       });
-      save();
+      if (!(await save())) {
+        data = previousData;
+        return false;
+      }
       showToast("Customer added to the book");
     },
   );
@@ -261,8 +290,9 @@ function serviceModal(id) {
   const existing = id && serviceById(id);
   openModal(
     existing ? "Edit service" : "Add a service",
-    `<div class="form-field"><label>Service name</label><input name="name" required value="${existing?.name || ""}" placeholder="e.g. Curtain"></div><div class="form-grid"><div class="form-field"><label>Price (NPR)</label><input name="price" type="number" min="0" required value="${existing?.price || ""}"></div><div class="form-field"><label>Charged by</label><select name="type"><option ${existing?.type === "per piece" ? "selected" : ""}>per piece</option><option ${existing?.type === "per kg" ? "selected" : ""}>per kg</option></select></div></div>`,
-    (form) => {
+    `<div class="form-field"><label>Service name</label><input name="name" required value="${existing?.name || ""}" placeholder="e.g. Curtain"></div><div class="form-grid"><div class="form-field"><label>Price</label><input name="price" type="number" min="0" required value="${existing?.price || ""}"></div><div class="form-field"><label>Charged by</label><select name="type"><option ${existing?.type === "per piece" ? "selected" : ""}>per piece</option><option ${existing?.type === "per kg" ? "selected" : ""}>per kg</option></select></div></div>`,
+    async (form) => {
+      const previousData = structuredClone(data);
       const record = {
         id: existing?.id || uid("s"),
         name: form.get("name"),
@@ -271,7 +301,10 @@ function serviceModal(id) {
       };
       if (existing) Object.assign(existing, record);
       else data.services.push(record);
-      save();
+      if (!(await save())) {
+        data = previousData;
+        return false;
+      }
       showToast(existing ? "Service updated" : "Service added");
     },
   );
@@ -446,7 +479,7 @@ function updateBillTotals() {
         )),
     );
 }
-function saveOrder() {
+async function saveOrder() {
   if (!billItems.length) {
     showToast("Add a service to the order first");
     return;
@@ -482,8 +515,13 @@ function saveOrder() {
       amount: serviceById(i.serviceId).price * Number(i.qty),
     })),
   };
+  const previousData = structuredClone(data);
   data.orders.unshift(order);
-  save();
+  if (!(await save())) {
+    data = previousData;
+    render();
+    return;
+  }
   showToast(`Order #${order.tokenNo} saved`);
   printReceipt(order.id);
   billItems = [];
@@ -492,10 +530,17 @@ function saveOrder() {
 function markOrderPaid(id) {
   const order = data.orders.find((o) => o.id === id);
   if (!order) return;
+  const previousPaid = order.paid;
   order.paid = order.total;
-  save();
-  render();
-  showToast(`Order #${order.tokenNo} marked fully paid`);
+  save().then((saved) => {
+    if (!saved) {
+      order.paid = previousPaid;
+      render();
+      return;
+    }
+    render();
+    showToast(`Order #${order.tokenNo} marked fully paid`);
+  });
 }
 function resetOrders() {
   if (!data.orders.length) {
@@ -505,10 +550,13 @@ function resetOrders() {
   openModal(
     "Reset all orders?",
     `<div class="reset-warning"><div class="warning-badge">!</div><div><p>This will clear the current order queue.</p><small>It will also restart the token count from 1.</small></div></div>`,
-    () => {
+    async () => {
+      const previousData = structuredClone(data);
       data.orders = [];
-      save();
-      render();
+      if (!(await save())) {
+        data = previousData;
+        return false;
+      }
       showToast("Orders reset");
     },
     "Reset orders",
@@ -520,13 +568,16 @@ function removeCustomer(id) {
   openModal(
     "Remove customer?",
     `<div class="reset-warning"><div class="warning-badge">!</div><div><p>This will delete ${customer.name} from the customer book.</p><small>Orders tied to this customer will remain, but the customer name will no longer appear.</small></div></div>`,
-    () => {
+    async () => {
+      const previousData = structuredClone(data);
       data.customers = data.customers.filter((c) => c.id !== id);
       data.orders = data.orders.map((order) =>
         order.customerId === id ? { ...order, customerId: "" } : order,
       );
-      save();
-      render();
+      if (!(await save())) {
+        data = previousData;
+        return false;
+      }
       showToast(`${customer.name} removed`);
     },
     "Remove",
@@ -584,40 +635,38 @@ function removeService(id) {
 }
 function cycleStatus(id) {
   const order = data.orders.find((o) => o.id === id);
+  if (!order) return;
+  const previousStatus = order.status;
   const statuses = ["Received", "Ready", "Delivered"];
   order.status = statuses[(statuses.indexOf(order.status) + 1) % 3];
-  save();
-  render();
-  showToast(`Order #${order.tokenNo} marked ${order.status}`);
+  save().then((saved) => {
+    if (!saved) {
+      order.status = previousStatus;
+      render();
+      return;
+    }
+    render();
+    showToast(`Order #${order.tokenNo} marked ${order.status}`);
+  });
 }
 async function changeStock(id, change) {
   const item = data.inventory.find((i) => i.id === id);
-  if (!item) return;
+  if (!item || !["add", "reduce"].includes(change)) return;
   const transactionFields =
     change === "reduce"
       ? `<div class="form-field"><label>Reason</label><select name="type"><option value="STOCK_OUT">Used</option><option value="DAMAGE">Damaged</option><option value="EXPIRED">Expired</option></select></div>`
       : "";
   openModal(
-    `${change === "add" ? "Add" : change === "adjust" ? "Adjust" : "Reduce"} ${item.name}`,
-    `${transactionFields}<div class="form-field"><label>${change === "adjust" ? "Adjustment quantity (negative to reduce stock)" : `Quantity (${item.unit})`}</label><input name="quantity" type="number" ${change === "adjust" ? 'step="any"' : 'min="0.001" step="any"'} required ${change === "adjust" ? "" : "autofocus"}></div>`,
+    `${change === "add" ? "Add" : "Reduce"} ${item.name}`,
+    `${transactionFields}<div class="form-field"><label>Quantity (${item.unit})</label><input name="quantity" type="number" min="0.001" step="any" required autofocus></div>`,
     async (form) => {
       const enteredQuantity = Number(form.get("quantity"));
-      if (!Number.isFinite(enteredQuantity) || enteredQuantity === 0 ||
-          (change !== "adjust" && enteredQuantity < 0)) {
-        showToast("Enter a valid non-zero quantity");
+      if (!Number.isFinite(enteredQuantity) || enteredQuantity <= 0) {
+        showToast("Enter a valid positive quantity");
         return false;
       }
-      const quantity =
-        change === "adjust"
-          ? enteredQuantity
-          : change === "add"
-            ? enteredQuantity
-            : -enteredQuantity;
+      const quantity = change === "add" ? enteredQuantity : -enteredQuantity;
       if (change === "reduce" && -quantity > Number(item.stock)) {
-        showToast("Stock cannot become negative");
-        return false;
-      }
-      if (change === "adjust" && Number(item.stock) + quantity < 0) {
         showToast("Stock cannot become negative");
         return false;
       }
@@ -630,16 +679,12 @@ async function changeStock(id, change) {
             transaction_type:
               change === "add"
                 ? "STOCK_IN"
-                : change === "adjust"
-                  ? "ADJUSTMENT"
-                  : form.get("type"),
+                : form.get("type"),
             quantity_change: quantity,
             notes:
               change === "add"
                 ? "Manual stock addition"
-                : change === "adjust"
-                  ? "Manual stock adjustment"
-                  : String(form.get("type")),
+                : String(form.get("type")),
           }),
         });
         const result = await response.json();

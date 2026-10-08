@@ -1,0 +1,143 @@
+---
+title: Kamal Power Laundry - Class Diagram
+---
+classDiagram
+    class AuthUsers {
+        +UUID id
+        +String email
+        +login()
+        +logout()
+    }
+    class Users {
+        +UUID id
+        +String username
+        +DateTime createdAt
+        +getProfile()
+    }
+    class Customer {
+        +String id
+        +String name
+        +String phone
+        +DateTime createdAt
+        +addCustomer()
+        +viewCustomer()
+        +deleteCustomer()
+    }
+    class Service {
+        +String id
+        +String name
+        +Decimal price
+        +String type
+        +DateTime createdAt
+        +addService()
+        +updateService()
+    }
+    class Order {
+        +String id
+        +Integer tokenNo
+        +String customerId
+        +Date date
+        +Date deliveryDate
+        +String status
+        +Decimal total
+        +Decimal discount
+        +Decimal paid
+        +DateTime createdAt
+        +createOrder()
+        +updateStatus()
+        +viewDetails()
+    }
+    class OrderItem {
+        +Integer id
+        +String orderId
+        +String serviceId
+        +Decimal qty
+        +Decimal rate
+        +Decimal amount
+        +calculateAmount()
+    }
+    class InventoryItem {
+        +String id
+        +String name
+        +Decimal stock
+        +String unit
+        +Decimal minStock
+        +DateTime createdAt
+        +DateTime updatedAt
+        +DateTime lastUpdatedAt
+        +checkLowStock()
+        +viewStock()
+    }
+    class Supplier {
+        +UUID id
+        +String name
+        +String phone
+        +String address
+        +String notes
+        +Boolean isActive
+        +DateTime createdAt
+        +DateTime updatedAt
+        +addSupplier()
+        +updateSupplier()
+        +deactivateSupplier()
+        +viewPurchaseHistory()
+    }
+    class Purchase {
+        +UUID id
+        +String purchaseNumber
+        +UUID supplierId
+        +Date purchaseDate
+        +String invoiceNumber
+        +Decimal totalAmount
+        +Decimal amountPaid
+        +Decimal balanceAmount
+        +String paymentStatus
+        +String purchaseStatus
+        +String notes
+        +UUID createdBy
+        +DateTime createdAt
+        +DateTime updatedAt
+        +calculateTotals()
+        +updatePayment()
+        +changeStatus()
+        +receive()
+        +cancel()
+    }
+    class PurchaseItem {
+        +UUID id
+        +UUID purchaseId
+        +String inventoryId
+        +String itemName
+        +Decimal quantity
+        +String unit
+        +Decimal unitCost
+        +Decimal totalAmount
+        +calculateLineTotal()
+    }
+    class StockTransaction {
+        +UUID id
+        +String inventoryId
+        +String transactionType
+        +Decimal quantityChange
+        +Decimal previousStock
+        +Decimal newStock
+        +UUID supplierId
+        +UUID purchaseId
+        +DateTime transactionDate
+        +String notes
+        +UUID createdBy
+        +recordMovement()
+    }
+
+    AuthUsers "1" -- "1" Users : profile
+    Users "1" -- "0..*" Purchase : creates
+    Users "1" -- "0..*" StockTransaction : records
+    Customer "1" -- "0..*" Order : places
+    Order "1" *-- "1..*" OrderItem : contains
+    Service "1" -- "0..*" OrderItem : selected for
+    Supplier "1" -- "0..*" Purchase : provides
+    Purchase "1" *-- "1..*" PurchaseItem : contains
+    InventoryItem "0..1" -- "0..*" PurchaseItem : inventory reference
+    InventoryItem "1" -- "0..*" StockTransaction : movement history
+    Supplier "0..1" -- "0..*" StockTransaction : source
+    Purchase "0..1" -- "0..*" StockTransaction : receipt movements

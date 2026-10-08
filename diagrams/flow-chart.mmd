@@ -1,0 +1,49 @@
+---
+title: Kamal Power Laundry - Supplier Purchase Flow Chart
+---
+flowchart TD
+    start([Start]) --> login[Sign in to shop desk]
+    login --> auth{Authenticated?}
+    auth -- No --> error[Show error and retry login]
+    error --> login
+    auth -- Yes --> suppliers[Open Suppliers]
+    suppliers --> supplierExists{Supplier exists?}
+    supplierExists -- No --> addSupplier[Add supplier name and details]
+    addSupplier --> supplierSaved[Save supplier]
+    supplierExists -- Yes --> purchaseForm
+    supplierSaved --> purchaseForm[Start new supply purchase]
+
+    purchaseForm --> enterDetails[Choose supplier, date, invoice, items, quantities, units, and costs]
+    enterDetails --> valid{At least one valid item and valid amounts?}
+    valid -- No --> validation[Show validation message]
+    validation --> enterDetails
+    valid -- Yes --> calculate[Calculate item totals and purchase total]
+    calculate --> enterPayment[Enter amount paid]
+    enterPayment --> paymentStatus[Derive payment status and remaining balance]
+    paymentStatus --> save[Save purchase as Draft or Ordered]
+    save --> saved{Save successful?}
+    saved -- No --> saveError[Show database or validation error]
+    saveError --> enterDetails
+    saved -- Yes --> statusAction{Choose purchase action}
+
+    statusAction -- Update payment --> paymentEdit[Change amount paid]
+    paymentEdit --> paymentStatus
+    statusAction -- Keep Draft or Ordered --> history[Show purchase history and status]
+    statusAction -- Change between Draft and Ordered --> ordered[Save Draft or Ordered status]
+    ordered --> history
+    statusAction -- Receive --> receiveConfirm{Confirm receipt?}
+    receiveConfirm -- No --> history
+    receiveConfirm -- Yes --> receive[Atomically receive purchase]
+    receive --> stockCheck{All stock updates valid?}
+    stockCheck -- No --> rollback[Rollback changes and report error]
+    rollback --> history
+    stockCheck -- Yes --> increaseStock[Increase item stock and update timestamps]
+    increaseStock --> recordMovement[Write a PURCHASE stock transaction per item]
+    recordMovement --> received[Set purchase status to Received]
+    received --> history
+    statusAction -- Cancel --> cancelConfirm{Confirm cancellation?}
+    cancelConfirm -- No --> history
+    cancelConfirm -- Yes --> cancelled[Set status to Cancelled; stock unchanged]
+    cancelled --> history
+    history --> viewDetails[View purchase or filter history and reports]
+    viewDetails --> finish([End])

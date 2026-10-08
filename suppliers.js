@@ -59,11 +59,13 @@
   }
   const supplierName = (id) => suppliers.find((row) => row.id === id)?.name || "Supplier";
   const status = (value) => `<span class="status ${esc(String(value || "").toLowerCase().replaceAll(" ", "-"))}">${esc(value)}</span>`;
+  const statusButton = (value, action, id, label) =>
+    `<button type="button" class="status status-control ${esc(String(value || "").toLowerCase().replaceAll(" ", "-"))}" data-supplier-action="${action}" data-id="${esc(id)}" title="${label}" aria-label="${label}: ${esc(value)}">${esc(value)}</button>`;
   const purchaseRows = (rows) =>
     rows
       .map(
         (purchase) =>
-          `<tr><td><strong>${esc(purchase.purchase_number)}</strong></td><td>${esc(purchase.supplier?.name || supplierName(purchase.supplier_id))}</td><td>${dateLabel(purchase.purchase_date)}</td><td>${purchase.items?.length || 0}</td><td class="amount">${money(purchase.total_amount)}</td><td class="amount">${money(purchase.balance_amount)}</td><td>${status(purchase.payment_status)}</td><td>${status(purchase.purchase_status)}</td><td><button class="small-action" data-supplier-action="purchase" data-id="${esc(purchase.id)}">View</button></td></tr>`,
+          `<tr><td><strong>${esc(purchase.purchase_number)}</strong></td><td>${esc(purchase.supplier?.name || supplierName(purchase.supplier_id))}</td><td>${dateLabel(purchase.purchase_date)}</td><td>${purchase.items?.length || 0}</td><td class="amount">${money(purchase.total_amount)}</td><td class="amount">${money(purchase.balance_amount)}</td><td>${purchase.purchase_status !== "Cancelled" ? statusButton(purchase.payment_status, "change-payment", purchase.id, "Update payment status") : status(purchase.payment_status)}</td><td>${["Draft", "Ordered"].includes(purchase.purchase_status) ? statusButton(purchase.purchase_status, "change-purchase-status", purchase.id, "Change purchase status") : status(purchase.purchase_status)}</td><td><button class="small-action" data-supplier-action="purchase" data-id="${esc(purchase.id)}">View</button></td></tr>`,
       )
       .join("") || '<tr><td colspan="9" class="empty-state">No purchases found.</td></tr>';
   const purchaseTable = (rows) =>
@@ -82,7 +84,7 @@
       .map((supplier) => {
         const history = purchases.filter((row) => row.supplier_id === supplier.id);
         const supplied = [...new Set(history.flatMap((row) => (row.items || []).map((line) => line.item_name || line.inventory?.name).filter(Boolean)))];
-        return `<tr><td><strong>${esc(supplier.name)}</strong>${supplier.is_active === false ? '<span class="subtext">Inactive</span>' : ""}</td><td>${esc(supplier.phone || "—")}</td><td>${esc(supplier.address || "—")}</td><td>${esc(supplied.join(", ") || "—")}</td><td>${history.length}</td><td class="amount">${money(totalOf(history.filter((row) => row.purchase_status === "Received"), "total_amount"))}</td><td>${dateLabel(history[0]?.purchase_date)}</td><td><button class="small-action" data-supplier-action="view" data-id="${esc(supplier.id)}">View</button> <button class="small-action" data-supplier-action="edit" data-id="${esc(supplier.id)}">Edit</button> ${supplier.is_active === false ? '<span class="subtext">Inactive</span>' : `<button class="small-action danger" data-supplier-action="delete" data-id="${esc(supplier.id)}">Delete</button>`}</td></tr>`;
+        return `<tr><td><strong>${esc(supplier.name)}</strong>${supplier.is_active === false ? '<span class="subtext">Inactive</span>' : ""}</td><td>${esc(supplier.phone || "—")}</td><td>${esc(supplier.address || "—")}</td><td>${esc(supplied.join(", ") || "—")}</td><td>${history.length}</td><td class="amount">${money(totalOf(history.filter((row) => row.purchase_status === "Received"), "total_amount"))}</td><td>${dateLabel(history[0]?.purchase_date)}</td><td><button class="small-action" data-supplier-action="view" data-id="${esc(supplier.id)}">View</button> <button class="small-action" data-supplier-action="edit" data-id="${esc(supplier.id)}">Edit</button> <button class="small-action danger" data-supplier-action="delete" data-id="${esc(supplier.id)}">Remove</button></td></tr>`;
       })
       .join("");
     return `<section class="panel table-panel supplier-table"><table><thead><tr><th>Supplier</th><th>Phone</th><th>Address</th><th>Items supplied</th><th>Purchases</th><th>Total spent</th><th>Last purchase</th><th>Actions</th></tr></thead><tbody>${rows || '<tr><td colspan="8" class="empty-state">No suppliers yet. Add your first supplier to get started.</td></tr>'}</tbody></table></section>`;
@@ -149,12 +151,27 @@
     return `${tabs}${section === "purchases" ? historyPage() : reportPage()}`;
   }
   function supplierForm(existing) {
-    const field = (key, label, type = "text", required = false) =>
-      `<div class="form-field"><label>${label}${required ? " *" : ""}</label><input name="${key}" type="${type}" ${required ? "required" : ""} value="${esc(existing?.[key] || "")}"></div>`;
-    window.openModal(existing ? "Edit supplier" : "Add supplier", `<div class="form-grid">${field("name", "Supplier name", "text", true)}${field("phone", "Phone number", "tel")}<div class="form-field field-full"><label>Address</label><input name="address" value="${esc(existing?.address || "")}"></div><div class="form-field field-full"><label>Notes</label><textarea class="form-input" name="notes" rows="3">${esc(existing?.notes || "")}</textarea></div></div>`, async (form) => {
+    const field = (key, label, type = "text", required = false, maxLength = 100) =>
+      `<div class="form-field"><label>${label}${required ? " *" : ""}</label><input name="${key}" type="${type}" maxlength="${maxLength}" ${required ? "required" : ""} value="${esc(existing?.[key] || "")}"></div>`;
+    window.openModal(existing ? "Edit supplier" : "Add supplier", `<div class="form-grid">${field("name", "Supplier name", "text", true, 100)}${field("phone", "Phone number", "tel", false, 20)}<div class="form-field field-full"><label>Address</label><input name="address" maxlength="250" value="${esc(existing?.address || "")}"></div><div class="form-field field-full"><label>Notes</label><textarea class="form-input" name="notes" maxlength="500" rows="3">${esc(existing?.notes || "")}</textarea></div></div>`, async (form) => {
       const body = Object.fromEntries(["name", "phone", "address", "notes"].map((key) => [key, String(form.get(key) || "").trim()]));
       if (!body.name) {
         toast("Supplier name is required");
+        return false;
+      }
+      if (body.name.length < 2 || body.name.length > 100 || !/^[\p{L}\p{N}\s&().'-]+$/u.test(body.name)) {
+        toast("Invalid format. Supplier name should not contain special characters except letters, numbers, spaces, &, (), ., ', and -.");
+        return false;
+      }
+      if (suppliers.some((supplier) =>
+        supplier.id !== existing?.id &&
+        supplier.name.trim().toLocaleLowerCase("en-IN") === body.name.toLocaleLowerCase("en-IN"),
+      )) {
+        toast("Supplier already exists");
+        return false;
+      }
+      if (body.address && !/^(?=.*[\p{L}\p{N}])[\p{L}\p{N}\s.,#\/'()&-]+$/u.test(body.address)) {
+        toast("Enter a valid address using letters, numbers, spaces, and common address punctuation.");
         return false;
       }
       try {
@@ -167,7 +184,7 @@
       }
     });
   }
-  const itemRow = () => `<div class="purchase-line"><div class="form-field"><label>Inventory item</label><select class="purchase-item-select"><option value="">Select an item</option>${inventory.map((item) => `<option value="${esc(item.id)}" data-name="${esc(item.name)}" data-unit="${esc(item.unit)}">${esc(item.name)} · ${esc(item.stock)} ${esc(item.unit)}</option>`).join("")}<option value="__new">＋ Add a new item</option></select><input class="purchase-new-item hidden" placeholder="New inventory item name"></div><div class="purchase-line-fields"><div class="form-field"><label>Quantity</label><input class="purchase-quantity" type="number" min="0.001" step="any" value="1" required></div><div class="form-field"><label>Unit</label><select class="purchase-unit">${units.map((unit) => `<option>${unit}</option>`).join("")}</select></div><div class="form-field"><label>Unit cost</label><input class="purchase-cost" type="number" min="0" step="0.01" value="0" required></div><strong class="purchase-line-total">${money(0)}</strong><button class="remove-item" type="button" data-remove-line aria-label="Remove item">×</button><div class="purchase-remove-confirm hidden"><span>Remove this item?</span><button type="button" class="small-action danger" data-confirm-remove>Remove</button><button type="button" class="small-action" data-cancel-remove>Keep</button></div></div></div>`;
+  const itemRow = () => `<div class="purchase-line"><div class="form-field"><label>Inventory item</label><select class="purchase-item-select"><option value="">Select an item</option>${inventory.map((item) => `<option value="${esc(item.id)}" data-name="${esc(item.name)}" data-unit="${esc(item.unit)}">${esc(item.name)} · ${esc(item.stock)} ${esc(item.unit)}</option>`).join("")}<option value="__new">＋ Add a new item</option></select><input class="purchase-new-item hidden" maxlength="80" placeholder="New inventory item name"></div><div class="purchase-line-fields"><div class="form-field"><label>Quantity</label><input class="purchase-quantity" type="number" min="0.001" max="1000000" step="0.001" value="1" required></div><div class="form-field"><label>Unit</label><select class="purchase-unit">${units.map((unit) => `<option>${unit}</option>`).join("")}</select></div><div class="form-field"><label>Unit cost</label><input class="purchase-cost" type="number" min="0" max="100000000" step="0.01" value="0" required></div><strong class="purchase-line-total">${money(0)}</strong><button class="remove-item" type="button" data-remove-line aria-label="Remove item">×</button><div class="purchase-remove-confirm hidden"><span>Remove this item?</span><button type="button" class="small-action danger" data-confirm-remove>Remove</button><button type="button" class="small-action" data-cancel-remove>Keep</button></div></div></div>`;
   function updatePurchaseSummary() {
     const root = document.getElementById("activeModal");
     if (!root) return;
@@ -236,7 +253,7 @@
   function purchaseForm(preselectedSupplier = "") {
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const form = `<div class="form-grid"><div class="form-field"><label>Supplier *</label><select name="supplier_id" required><option value="">Select supplier</option>${suppliers.filter((row) => row.is_active !== false).map((row) => `<option value="${esc(row.id)}" ${preselectedSupplier === row.id ? "selected" : ""}>${esc(row.name)}</option>`).join("")}</select></div><div class="form-field"><label>Purchase date</label><input name="purchase_date" type="date" required value="${today}"></div><div class="form-field"><label>Invoice / bill number</label><input name="invoice_number"></div><div class="form-field"><label>Purchase status</label><select name="purchase_status"><option>Draft</option><option>Ordered</option></select></div></div><div class="supplier-purchase-items-head"><div><h3>Purchase items</h3><p class="muted">Choose inventory items and enter the quantity and cost.</p></div><button type="button" class="button ghost" id="add-purchase-line">＋ Add item</button></div><div id="purchase-lines">${itemRow()}</div><div class="form-grid purchase-payment-fields"><div class="form-field"><label>Amount paid</label><input name="amount_paid" type="number" min="0" step="0.01" value="0"></div><div class="form-field"><label>Notes</label><input name="notes"></div></div><div class="purchase-summary"><div><span>Total purchase amount</span><strong id="purchase-total">${money(0)}</strong></div><div><span>Payment status</span><strong id="purchase-payment-status">Unpaid</strong></div><div><span>Remaining balance</span><strong id="purchase-balance">${money(0)}</strong></div><p class="muted">Inventory stock changes only when the purchase is marked received.</p></div>`;
+    const form = `<div class="form-grid"><div class="form-field"><label>Supplier *</label><select name="supplier_id" required><option value="">Select supplier</option>${suppliers.filter((row) => row.is_active !== false).map((row) => `<option value="${esc(row.id)}" ${preselectedSupplier === row.id ? "selected" : ""}>${esc(row.name)}</option>`).join("")}</select></div><div class="form-field"><label>Purchase date</label><input name="purchase_date" type="date" max="${today}" required value="${today}"></div><div class="form-field"><label>Invoice / bill number</label><input name="invoice_number" maxlength="100"></div><div class="form-field"><label>Purchase status</label><select name="purchase_status"><option>Draft</option><option>Ordered</option></select></div></div><div class="supplier-purchase-items-head"><div><h3>Purchase items</h3><p class="muted">Choose inventory items and enter the quantity and cost.</p></div><button type="button" class="button ghost" id="add-purchase-line">＋ Add item</button></div><div id="purchase-lines">${itemRow()}</div><div class="form-grid purchase-payment-fields"><div class="form-field"><label>Amount paid</label><input name="amount_paid" type="number" min="0" max="100000000" step="0.01" value="0"></div><div class="form-field"><label>Notes</label><input name="notes" maxlength="1000"></div></div><div class="purchase-summary"><div><span>Total purchase amount</span><strong id="purchase-total">${money(0)}</strong></div><div><span>Payment status</span><strong id="purchase-payment-status">Unpaid</strong></div><div><span>Remaining balance</span><strong id="purchase-balance">${money(0)}</strong></div><p class="muted">Inventory stock changes only when the purchase is marked received.</p></div>`;
     window.openModal("New supply purchase", form, async (formData) => {
       const root = document.getElementById("activeModal");
       const lines = [...root.querySelectorAll(".purchase-line")].map((line) => {
@@ -336,10 +353,20 @@
           const target = suppliers.find((row) => row.id === id);
           if (!target) return;
           const history = purchases.some((row) => row.supplier_id === id);
-          confirmAction(history ? "Deactivate supplier?" : "Delete supplier?", history ? `${target.name} has purchase history and will be deactivated, not deleted.` : `Delete ${target.name}?`, history ? "Deactivate" : "Delete", async () => {
+          const inactive = target.is_active === false;
+          const permanentlyRemove = inactive && history;
+          confirmAction(
+            history && !inactive ? "Deactivate supplier?" : "Remove supplier?",
+            permanentlyRemove
+              ? `Permanently remove ${target.name} and its purchase history? This cannot be undone.`
+              : history
+                ? `${target.name} has purchase history and will be deactivated, not deleted.`
+                : `Remove ${target.name}?`,
+            permanentlyRemove ? "Remove permanently" : history ? "Deactivate" : "Remove",
+            async () => {
             await request(`/api/suppliers/${encodeURIComponent(id)}`, { method: "DELETE" });
             await refresh();
-            toast(history ? "Supplier deactivated" : "Supplier deleted");
+            toast(permanentlyRemove ? "Supplier and purchase history removed" : history ? "Supplier deactivated" : "Supplier removed");
           });
           break;
         }

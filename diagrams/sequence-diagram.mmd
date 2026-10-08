@@ -1,0 +1,78 @@
+---
+title: Kamal Power Laundry - Authentication and Supplier Purchase Sequence
+---
+sequenceDiagram
+    autonumber
+    actor Owner
+    participant UI as Browser UI
+    participant API as Express API
+    participant Auth as Supabase Auth
+    participant DB as Supabase PostgreSQL
+
+    Owner->>UI: Enter username and password
+    UI->>API: POST /api/login
+    API->>Auth: signInWithPassword(email, password)
+    alt Credentials invalid
+        Auth-->>API: Authentication error
+        API-->>UI: 401 Incorrect username or password
+        UI-->>Owner: Show login error
+    else Credentials valid
+        Auth-->>API: Authenticated user ID and email
+        API-->>UI: Create session and return username
+        UI->>API: GET /api/state
+        API->>DB: Ensure public.users profile exists
+        DB-->>API: User profile ready
+        API->>DB: Load customers, services, orders, items, inventory
+        DB-->>API: Application data
+        API-->>UI: Return dashboard data
+        UI-->>Owner: Show shop desk
+    end
+
+    opt Create supplier purchase
+        Owner->>UI: Enter supplier, date, items, quantities, costs, and payment
+        UI->>UI: Calculate totals, payment status, and balance
+        UI->>API: POST /api/purchases
+        API->>DB: Validate and execute create_purchase RPC
+        DB->>DB: Insert purchase and purchase items atomically
+        DB-->>API: Purchase ID
+        API->>DB: Load saved purchase
+        DB-->>API: Purchase data
+        API-->>UI: 201 Created
+        UI-->>Owner: Show purchase details and status
+    end
+
+    opt Update supplier payment
+        Owner->>UI: Choose payment status or enter amount paid
+        UI->>UI: Preview derived payment status and balance
+        UI->>API: PATCH /api/purchases/{id}/payment
+        API->>DB: Update amount_paid, balance_amount, payment_status
+        DB-->>API: Updated purchase
+        API-->>UI: Updated payment details
+        UI-->>Owner: Refresh PAYMENT badge and balance
+    end
+
+    opt Change purchase status to Received
+        Owner->>UI: Confirm receipt
+        UI->>API: POST /api/purchases/{id}/receive
+        API->>DB: Execute receive_purchase RPC
+        DB->>DB: Lock purchase and validate Draft or Ordered
+        loop Each purchase item
+            DB->>DB: Create inventory item if needed
+            DB->>DB: Increase stock and update inventory timestamps
+            DB->>DB: Insert PURCHASE stock transaction
+        end
+        DB->>DB: Set purchase status to Received
+        DB-->>API: Receipt result
+        API-->>UI: Purchase received
+        UI-->>Owner: Refresh status and inventory
+    end
+
+    opt Change purchase status to Draft, Ordered, or Cancelled
+        Owner->>UI: Choose status and confirm cancellation when selected
+        UI->>API: PUT /api/purchases/{id} or DELETE /api/purchases/{id}
+        API->>DB: Validate and update purchase status
+        API->>DB: Cancellation is pre-receipt only and stock remains unchanged
+        DB-->>API: Updated purchase
+        API-->>UI: Updated status
+        UI-->>Owner: Refresh STATUS badge
+    end

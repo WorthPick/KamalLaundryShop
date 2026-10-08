@@ -565,6 +565,17 @@ tbody tr:hover {
   font: 10px "DM Mono";
   border-radius: 2px;
 }
+.status-control {
+  border: 0;
+  cursor: pointer;
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+.status-control:hover,
+.status-control:focus-visible {
+  filter: brightness(0.96);
+  box-shadow: 0 0 0 2px rgba(15, 110, 99, 0.18);
+  outline: none;
+}
 .status.received {
   background: #fff5d6;
   color: #8b6a16;

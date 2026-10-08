@@ -1,0 +1,59 @@
+---
+title: Kamal Power Laundry - Activity Diagram
+---
+flowchart TD
+    start((Start)) --> login[Open shop desk and enter credentials]
+    login --> auth[Authenticate with Supabase Auth]
+    auth --> valid{Credentials valid?}
+    valid -- No --> authError[Show login error]
+    authError --> login
+    valid -- Yes --> session[Create server session and ensure user profile]
+    session --> dashboard[Load dashboard and application data]
+    dashboard --> menu{Choose a module}
+
+    menu --> customer[Manage customers]
+    menu --> orders[Create orders and update order status]
+    menu --> services[Manage services and prices]
+    menu --> inventory[Review stock, low-stock alerts, and stock movements]
+    menu --> suppliers[Open Suppliers]
+
+    suppliers --> supplierChoice{Supplier action}
+    supplierChoice --> supplierManage[Add, view, edit, or deactivate supplier]
+    supplierChoice --> purchase[Create supply purchase]
+    supplierChoice --> history[Filter and view purchase history and reports]
+
+    purchase --> details[Select supplier, inventory items, quantities, units, costs, and date]
+    details --> validPurchase{Supplier and at least one valid item?}
+    validPurchase -- No --> purchaseError[Show validation error]
+    purchaseError --> details
+    validPurchase -- Yes --> total[Calculate line totals, purchase total, payment status, and balance]
+    total --> save[Save as Draft or Ordered]
+    save --> updatePayment{Update payment now?}
+    updatePayment -- Yes --> paidAmount[Enter amount paid]
+    paidAmount --> recompute[Recalculate Paid, Unpaid, or Partially Paid and balance]
+    recompute --> savePayment[Save payment update]
+    updatePayment -- No --> statusChoice
+    savePayment --> statusChoice{Change purchase status?}
+    statusChoice -- No --> history
+    statusChoice -- Draft or Ordered --> updateStatus[Save Draft or Ordered status]
+    statusChoice -- Received --> confirmReceive{Confirm receipt?}
+    confirmReceive -- No --> history
+    confirmReceive -- Yes --> receive[Receive purchase atomically]
+    receive --> stock[Increase each inventory item and update its timestamp]
+    stock --> audit[Write stock transaction for every received item]
+    audit --> history
+    statusChoice -- Cancelled --> confirmCancel{Confirm cancellation?}
+    confirmCancel -- No --> history
+    confirmCancel -- Yes --> cancel[Mark purchase Cancelled without changing stock]
+    cancel --> history
+
+    customer --> saveChanges[Save changes and show result]
+    orders --> saveChanges
+    services --> saveChanges
+    inventory --> saveChanges
+    supplierManage --> saveChanges
+    history --> saveChanges
+    updateStatus --> saveChanges
+    saveChanges --> logout{Sign out?}
+    logout -- No --> dashboard
+    logout -- Yes --> finish([End])

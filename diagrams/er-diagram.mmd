@@ -1,0 +1,119 @@
+---
+title: Kamal Power Laundry - Entity Relationship Diagram
+---
+erDiagram
+    AUTH_USERS {
+        uuid id PK
+        text email
+    }
+    USERS {
+        uuid id PK, FK
+        text username UK
+        timestamptz created_at
+    }
+    CUSTOMERS {
+        text id PK
+        text name
+        text phone
+        timestamptz created_at
+    }
+    SERVICES {
+        text id PK
+        text name
+        numeric price
+        text type
+        timestamptz created_at
+    }
+    ORDERS {
+        text id PK
+        integer token_no UK
+        text customer_id FK
+        date date
+        date delivery_date
+        text status
+        numeric total
+        numeric discount
+        numeric paid
+        timestamptz created_at
+    }
+    ORDER_ITEMS {
+        bigint id PK
+        text order_id FK
+        text service_id FK
+        numeric qty
+        numeric rate
+        numeric amount
+    }
+    INVENTORY {
+        text id PK
+        text name
+        numeric stock
+        text unit
+        numeric min_stock
+        timestamptz created_at
+        timestamptz updated_at
+        timestamptz last_updated_at
+    }
+    SUPPLIERS {
+        uuid id PK
+        text name
+        text phone
+        text address
+        text notes
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    PURCHASES {
+        uuid id PK
+        text purchase_number UK
+        uuid supplier_id FK
+        date purchase_date
+        text invoice_number
+        numeric total_amount
+        numeric amount_paid
+        numeric balance_amount
+        text payment_status
+        text purchase_status
+        text notes
+        uuid created_by FK
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    PURCHASE_ITEMS {
+        uuid id PK
+        uuid purchase_id FK
+        text inventory_id FK
+        text item_name
+        numeric quantity
+        text unit
+        numeric unit_cost
+        numeric total_amount
+        timestamptz created_at
+    }
+    STOCK_TRANSACTIONS {
+        uuid id PK
+        text inventory_id FK
+        text transaction_type
+        numeric quantity_change
+        numeric previous_stock
+        numeric new_stock
+        uuid supplier_id FK
+        uuid purchase_id FK
+        timestamptz transaction_date
+        text notes
+        uuid created_by FK
+    }
+
+    AUTH_USERS ||--|| USERS : "has profile"
+    USERS ||--o{ PURCHASES : "creates"
+    USERS ||--o{ STOCK_TRANSACTIONS : "records"
+    CUSTOMERS ||--o{ ORDERS : "places"
+    ORDERS ||--|{ ORDER_ITEMS : "contains"
+    SERVICES ||--o{ ORDER_ITEMS : "is used by"
+    SUPPLIERS ||--o{ PURCHASES : "supplies"
+    PURCHASES ||--|{ PURCHASE_ITEMS : "contains"
+    INVENTORY o|--o{ PURCHASE_ITEMS : "may reference"
+    INVENTORY ||--o{ STOCK_TRANSACTIONS : "has movements"
+    SUPPLIERS o|--o{ STOCK_TRANSACTIONS : "may be linked to"
+    PURCHASES o|--o{ STOCK_TRANSACTIONS : "creates on receipt"
